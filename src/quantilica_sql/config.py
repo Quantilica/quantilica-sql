@@ -40,13 +40,12 @@ class Settings:
         )
     )
     tablespace_rfb: str = field(
-        default_factory=lambda: os.environ.get(
-            "POSTGRES_TABLESPACE_RFB", "pg_default"
-        )
+        default_factory=lambda: os.environ.get("POSTGRES_TABLESPACE_RFB", "pg_default")
     )
     plugins_dir: Path = field(
-        default_factory=lambda: platformdirs.user_data_path("quantilica-sql")
-        / "plugins"
+        default_factory=lambda: (
+            platformdirs.user_data_path("quantilica-sql") / "plugins"
+        )
     )
 
     def normalize_db_url(self) -> str:

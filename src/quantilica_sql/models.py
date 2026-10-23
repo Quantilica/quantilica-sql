@@ -15,7 +15,7 @@ class LoadedFileRecord:
     dataset: str
     rows_loaded: int
     loaded_at: datetime.datetime = field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
+        default_factory=lambda: datetime.datetime.now(datetime.UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import io
 import logging
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 logger = logging.getLogger("quantilica_sql.copy_stream")
 
@@ -25,30 +25,46 @@ def copy_from_file(
     encoding: str = "UTF8",
 ) -> int:
     """Carrega dados de um arquivo em disco via streaming nativo COPY FROM STDIN."""
-    cols_sql = f'({", ".join(f'"{c}"' for c in columns)})' if columns else ""
-    copy_sql = f"""
-        COPY "{schema}"."{table}" {cols_sql}
+    target_table = sql.SQL("{}.{}").format(
+        sql.Identifier(schema), sql.Identifier(table)
+    )
+    cols_sql = (
+        sql.SQL("({})").format(sql.SQL(", ").join(sql.Identifier(c) for c in columns))
+        if columns
+        else sql.SQL("")
+    )
+    copy_sql = sql.SQL(
+        """
+        COPY {} {}
         FROM STDIN WITH (
             FORMAT csv,
-            DELIMITER '{delimiter}',
-            NULL '{null_value}',
-            QUOTE '{quote}',
-            ENCODING '{encoding}'
+            DELIMITER {},
+            NULL {},
+            QUOTE {},
+            ENCODING {}
         );
-    """
+        """
+    ).format(
+        target_table,
+        cols_sql,
+        sql.Literal(delimiter),
+        sql.Literal(null_value),
+        sql.Literal(quote),
+        sql.Literal(encoding),
+    )
     with conn.cursor() as cur:
         with cur.copy(copy_sql) as copy:
             with open(file_path, "rb") as f:
                 while chunk := f.read(1024 * 1024):  # blocos de 1 MB
                     copy.write(chunk)
+        rows_copied = (
+            cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
+        )
 
     if not conn.autocommit:
         conn.commit()
 
-    # Obtém contagem aproximada/atual
-    with conn.cursor() as cur:
-        cur.execute(f'SELECT count(*) FROM "{schema}"."{table}";')
-        return int(cur.fetchone()[0])
+    return rows_copied
 
 
 def copy_from_rows(
@@ -57,43 +73,25 @@ def copy_from_rows(
     table: str,
     columns: list[str],
     rows: Iterable[Iterable[Any]],
-    delimiter: str = "\t",
-    chunk_size: int = 10000,
 ) -> int:
-    """Escreve um gerador ou iterável de tuplas diretamente via COPY bufferizado."""
-    cols_sql = f'({", ".join(f'"{c}"' for c in columns)})'
-    copy_sql = f"""
-        COPY "{schema}"."{table}" {cols_sql}
-        FROM STDIN WITH (
-            FORMAT csv,
-            DELIMITER '{delimiter}',
-            NULL '',
-            QUOTE '"',
-            ENCODING 'UTF8'
-        );
-    """
-    total = 0
-    buf = io.StringIO()
+    """Escreve um iterável de tuplas diretamente via COPY write_row nativo."""
+    target_table = sql.SQL("{}.{}").format(
+        sql.Identifier(schema), sql.Identifier(table)
+    )
+    cols_sql = sql.SQL("({})").format(
+        sql.SQL(", ").join(sql.Identifier(c) for c in columns)
+    )
+    copy_sql = sql.SQL("COPY {} {} FROM STDIN").format(target_table, cols_sql)
+
     with conn.cursor() as cur:
         with cur.copy(copy_sql) as copy:
             for row in rows:
-                row_str = delimiter.join(
-                    ""
-                    if val is None
-                    else str(val).replace("\t", " ").replace("\n", " ")
-                    for val in row
-                )
-                buf.write(row_str + "\n")
-                total += 1
-                if total % chunk_size == 0:
-                    copy.write(buf.getvalue().encode("utf-8"))
-                    buf.seek(0)
-                    buf.truncate(0)
-
-            if buf.tell() > 0:
-                copy.write(buf.getvalue().encode("utf-8"))
+                copy.write_row(row)
+        rows_copied = (
+            cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
+        )
 
     if not conn.autocommit:
         conn.commit()
 
-    return total
+    return rows_copied

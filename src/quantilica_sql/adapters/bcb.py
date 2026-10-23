@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
 from quantilica_sql.database import ensure_schema
@@ -28,13 +29,17 @@ class BcbAdapter(BaseSourceAdapter):
     def status(self, conn: psycopg.Connection) -> dict[str, Any]:
         ensure_schema(conn, self.schema)
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
+            query = sql.SQL(
+                """
                 SELECT count(*), coalesce(sum(linhas), 0) 
-                FROM "{self.schema}"."arquivo_carregado" 
+                FROM {schema}.{table} 
                 WHERE dataset = 'series';
                 """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                table=sql.Identifier("arquivo_carregado"),
             )
+            cur.execute(query)
             series_count, total_rows = cur.fetchone()
             return {
                 "domain": self.domain,
@@ -52,4 +57,8 @@ class BcbAdapter(BaseSourceAdapter):
         ensure_schema(conn, self.schema)
         series_id = kwargs.get("series_id")
         logger.info("Carregando série BCB %s via adaptador", series_id)
-        return 0
+        raise NotImplementedError(
+            f"O adaptador de carga '{self.domain}' ainda não foi portado para "
+            f"o motor quantilica-sql v0.1.0. Utilize o pacote 'bcb-sgs-sql' "
+            f"ou consulte o plano de migração."
+        )

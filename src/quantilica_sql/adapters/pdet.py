@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
 from quantilica_sql.database import ensure_schema
@@ -28,14 +29,18 @@ class PdetAdapter(BaseSourceAdapter):
     def status(self, conn: psycopg.Connection) -> dict[str, Any]:
         ensure_schema(conn, self.schema)
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
+            query = sql.SQL(
+                """
                 SELECT dataset, count(*), coalesce(sum(linhas), 0)
-                FROM "{self.schema}"."arquivo_carregado"
+                FROM {schema}.{table}
                 GROUP BY dataset
                 ORDER BY sum(linhas) DESC;
                 """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                table=sql.Identifier("arquivo_carregado"),
             )
+            cur.execute(query)
             rows = cur.fetchall()
             return {
                 "domain": self.domain,
@@ -54,5 +59,9 @@ class PdetAdapter(BaseSourceAdapter):
         ensure_schema(conn, self.schema)
         datasets = kwargs.get("datasets", ["rais-vinculos"])
         logger.info("Executando carga de PDET para datasets: %s", datasets)
-        # Delega ao motor de streaming efêmero
-        return 0
+        raise NotImplementedError(
+            f"O adaptador de carga '{self.domain}' ainda não foi portado para "
+            f"o motor quantilica-sql v0.1.0. Utilize o loader canônico "
+            f"'quantilica-workers/scripts/load_pdet_to_postgres.py' "
+            f"ou consulte o plano de migração."
+        )

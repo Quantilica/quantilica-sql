@@ -29,11 +29,12 @@ class RfbAdapter(BaseSourceAdapter):
         ensure_schema(conn, self.schema)
         with conn.cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT count(*) 
                 FROM information_schema.tables 
-                WHERE table_schema = '{self.schema}';
-                """
+                WHERE table_schema = %s;
+                """,
+                (self.schema,),
             )
             tables_count = cur.fetchone()[0]
             return {
@@ -51,4 +52,9 @@ class RfbAdapter(BaseSourceAdapter):
         ensure_schema(conn, self.schema)
         competencia = kwargs.get("competencia")
         logger.info("Executando carga de RFB CNPJ para competência: %s", competencia)
-        return 0
+        raise NotImplementedError(
+            f"O adaptador de carga '{self.domain}' ainda não foi portado para "
+            f"o motor quantilica-sql v0.1.0. Utilize o loader canônico "
+            f"'quantilica-workers/scripts/load_rfb_to_postgres.py' "
+            f"ou consulte o plano de migração."
+        )

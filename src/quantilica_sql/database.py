@@ -9,6 +9,7 @@ from collections.abc import Generator
 from typing import Any
 
 import psycopg
+from psycopg import sql
 from sqlalchemy import Engine, create_engine
 
 from quantilica_sql.config import get_settings
@@ -44,9 +45,12 @@ def get_connection(
 
 
 def ensure_schema(conn: psycopg.Connection, schema_name: str) -> None:
-    """Garante que o schema existe no banco."""
+    """Garante que o schema existe no banco usando identificador seguro."""
+    query = sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+        sql.Identifier(schema_name)
+    )
     with conn.cursor() as cur:
-        cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}";')
+        cur.execute(query)
     if not conn.autocommit:
         conn.commit()
 
@@ -78,12 +82,18 @@ def inspect_schemas(conn: psycopg.Connection) -> list[dict[str, Any]]:
     SELECT 
         schemaname,
         count(*) as table_count,
-        pg_size_pretty(sum(pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(tablename)))::bigint) as total_size,
-        sum(pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(tablename)))::bigint as total_bytes
+        pg_size_pretty(
+            sum(pg_total_relation_size(
+                quote_ident(schemaname) || '.' || quote_ident(tablename)
+            ))::bigint
+        ) as total_size,
+        sum(pg_total_relation_size(
+            quote_ident(schemaname) || '.' || quote_ident(tablename)
+        ))::bigint as total_bytes
     FROM pg_tables
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
     GROUP BY schemaname
-    ORDER BY sum(pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(tablename))) DESC;
+    ORDER BY 4 DESC;
     """
     with conn.cursor() as cur:
         cur.execute(query)

@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 logger = logging.getLogger("quantilica_sql.partitions")
 
@@ -19,7 +20,6 @@ def ensure_yearly_partition(
 ) -> str:
     """Garante que uma partição anual existe e está vinculada à tabela pai."""
     part_name = f"{parent_table}_{year}"
-    tb_clause = f'TABLESPACE "{tablespace}"' if tablespace != "pg_default" else ""
 
     check_sql = """
     SELECT 1 FROM pg_class c
@@ -31,12 +31,32 @@ def ensure_yearly_partition(
         if cur.fetchone():
             return f'"{schema}"."{part_name}"'
 
-        create_sql = f"""
-        CREATE TABLE IF NOT EXISTS "{schema}"."{part_name}"
-        PARTITION OF "{schema}"."{parent_table}"
-        FOR VALUES FROM ({year}) TO ({year + 1})
-        {tb_clause};
-        """
+        tb_clause = (
+            sql.SQL("TABLESPACE {}").format(sql.Identifier(tablespace))
+            if tablespace != "pg_default"
+            else sql.SQL("")
+        )
+        target_part = sql.SQL("{}.{}").format(
+            sql.Identifier(schema), sql.Identifier(part_name)
+        )
+        target_parent = sql.SQL("{}.{}").format(
+            sql.Identifier(schema), sql.Identifier(parent_table)
+        )
+
+        create_sql = sql.SQL(
+            """
+            CREATE TABLE IF NOT EXISTS {}
+            PARTITION OF {}
+            FOR VALUES FROM ({}) TO ({})
+            {};
+            """
+        ).format(
+            target_part,
+            target_parent,
+            sql.Literal(year),
+            sql.Literal(year + 1),
+            tb_clause,
+        )
         cur.execute(create_sql)
         logger.info("Partição anual criada: %s.%s (%s)", schema, part_name, tablespace)
 
@@ -53,9 +73,8 @@ def ensure_monthly_partition(
     month: int,
     tablespace: str = "pg_default",
 ) -> str:
-    """Garante partição mensal nomeada {parent_table}_{year}_{month:02d}."""
+    """Garante partição mensal vinculada à tabela pai declarativa."""
     part_name = f"{parent_table}_{year}_{month:02d}"
-    tb_clause = f'TABLESPACE "{tablespace}"' if tablespace != "pg_default" else ""
 
     check_sql = """
     SELECT 1 FROM pg_class c
@@ -67,11 +86,37 @@ def ensure_monthly_partition(
         if cur.fetchone():
             return f'"{schema}"."{part_name}"'
 
-        create_sql = f"""
-        CREATE TABLE IF NOT EXISTS "{schema}"."{part_name}"
-        (LIKE "{schema}"."{parent_table}" INCLUDING ALL)
-        {tb_clause};
-        """
+        start_date = f"{year:04d}-{month:02d}-01"
+        next_year = year + 1 if month == 12 else year
+        next_month = 1 if month == 12 else month + 1
+        end_date = f"{next_year:04d}-{next_month:02d}-01"
+
+        tb_clause = (
+            sql.SQL("TABLESPACE {}").format(sql.Identifier(tablespace))
+            if tablespace != "pg_default"
+            else sql.SQL("")
+        )
+        target_part = sql.SQL("{}.{}").format(
+            sql.Identifier(schema), sql.Identifier(part_name)
+        )
+        target_parent = sql.SQL("{}.{}").format(
+            sql.Identifier(schema), sql.Identifier(parent_table)
+        )
+
+        create_sql = sql.SQL(
+            """
+            CREATE TABLE IF NOT EXISTS {}
+            PARTITION OF {}
+            FOR VALUES FROM ({}) TO ({})
+            {};
+            """
+        ).format(
+            target_part,
+            target_parent,
+            sql.Literal(start_date),
+            sql.Literal(end_date),
+            tb_clause,
+        )
         cur.execute(create_sql)
         logger.info("Partição mensal criada: %s.%s (%s)", schema, part_name, tablespace)
 
@@ -94,12 +139,11 @@ def list_partitions(
     JOIN pg_class c ON c.oid = i.inhrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
     LEFT JOIN pg_tablespace spc ON spc.oid = c.reltablespace
-    WHERE i.inhparent = %s::regclass
+    WHERE i.inhparent = (%s || '.' || %s)::regclass
     ORDER BY c.relname;
     """
-    full_parent = f'"{schema}"."{parent_table}"'
     with conn.cursor() as cur:
-        cur.execute(query, (full_parent,))
+        cur.execute(query, (schema, parent_table))
         rows = cur.fetchall()
         return [
             {

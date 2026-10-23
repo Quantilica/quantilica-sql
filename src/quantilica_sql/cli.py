@@ -1,8 +1,7 @@
-"""CLI principal do motor quantilica-sql (montável como subcomando em quantilica-cli)."""
+"""CLI principal do motor quantilica-sql (montável em quantilica-cli)."""
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -12,7 +11,6 @@ from rich.table import Table
 
 from quantilica_sql import __version__
 from quantilica_sql.adapters import get_adapter, list_supported_domains
-from quantilica_sql.config import get_settings
 from quantilica_sql.core.tablespaces import list_tablespaces
 from quantilica_sql.database import get_connection, inspect_schemas
 from quantilica_sql.plugin_manager import PluginManager
@@ -20,7 +18,7 @@ from quantilica_sql.runner import run_pipeline
 
 app = typer.Typer(
     name="sql",
-    help="Motor unificado de ingestão, particionamento e pipelines analíticos no PostgreSQL.",
+    help="Motor unificado de ingestão e pipelines analíticos no PostgreSQL.",
     no_args_is_help=True,
 )
 
@@ -104,9 +102,7 @@ def cmd_load(
 def cmd_run(
     pipeline: Annotated[
         str,
-        typer.Argument(
-            help="Nome ou caminho do pipeline a executar (ex: macro/ipca)"
-        ),
+        typer.Argument(help="Nome ou caminho do pipeline a executar (ex: macro/ipca)"),
     ],
 ) -> None:
     """Executa um pipeline de transformação SQL na camada analytics."""

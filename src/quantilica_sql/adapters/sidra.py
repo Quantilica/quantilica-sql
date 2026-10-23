@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
 from quantilica_sql.database import ensure_schema
@@ -28,13 +29,17 @@ class SidraAdapter(BaseSourceAdapter):
     def status(self, conn: psycopg.Connection) -> dict[str, Any]:
         ensure_schema(conn, self.schema)
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
+            query = sql.SQL(
+                """
                 SELECT count(*), coalesce(sum(linhas), 0) 
-                FROM "{self.schema}"."arquivo_carregado" 
+                FROM {schema}.{table} 
                 WHERE dataset = 'tabela_sidra';
                 """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                table=sql.Identifier("arquivo_carregado"),
             )
+            cur.execute(query)
             tables_count, total_rows = cur.fetchone()
             return {
                 "domain": self.domain,
@@ -52,5 +57,8 @@ class SidraAdapter(BaseSourceAdapter):
         ensure_schema(conn, self.schema)
         table_id = kwargs.get("table_id")
         logger.info("Carregando tabela SIDRA %s via adaptador", table_id)
-        # Integração com sidra-fetcher e copy_stream
-        return 0
+        raise NotImplementedError(
+            f"O adaptador de carga '{self.domain}' ainda não foi portado para "
+            f"o motor quantilica-sql v0.1.0. Utilize o pacote 'sidra-sql' "
+            f"ou consulte o plano de migração."
+        )

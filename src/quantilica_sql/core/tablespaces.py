@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 logger = logging.getLogger("quantilica_sql.tablespaces")
 
@@ -39,10 +40,15 @@ def move_table_to_tablespace(
     conn: psycopg.Connection, schema: str, table: str, tablespace: str
 ) -> bool:
     """Move uma tabela e seus índices para a tablespace indicada."""
-    full_table = f'"{schema}"."{table}"'
+    target_table = sql.SQL("{}.{}").format(
+        sql.Identifier(schema), sql.Identifier(table)
+    )
+    target_ts = sql.Identifier(tablespace)
     with conn.cursor() as cur:
-        logger.info("Movendo %s para tablespace %s...", full_table, tablespace)
-        cur.execute(f'ALTER TABLE {full_table} SET TABLESPACE "{tablespace}";')
+        logger.info("Movendo %s.%s para tablespace %s...", schema, table, tablespace)
+        cur.execute(
+            sql.SQL("ALTER TABLE {} SET TABLESPACE {}").format(target_table, target_ts)
+        )
 
         # Move índices associados
         cur.execute(
@@ -50,13 +56,20 @@ def move_table_to_tablespace(
             SELECT c.relname 
             FROM pg_class c 
             JOIN pg_index i ON i.indexrelid = c.oid 
-            WHERE i.indrelid = %s::regclass;
+            WHERE i.indrelid = (%s || '.' || %s)::regclass;
             """,
-            (full_table,),
+            (schema, table),
         )
         indexes = cur.fetchall()
         for (idx,) in indexes:
-            cur.execute(f'ALTER INDEX "{schema}"."{idx}" SET TABLESPACE "{tablespace}";')
+            target_idx = sql.SQL("{}.{}").format(
+                sql.Identifier(schema), sql.Identifier(idx)
+            )
+            cur.execute(
+                sql.SQL("ALTER INDEX {} SET TABLESPACE {}").format(
+                    target_idx, target_ts
+                )
+            )
 
     if not conn.autocommit:
         conn.commit()
