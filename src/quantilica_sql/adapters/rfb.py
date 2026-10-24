@@ -128,20 +128,32 @@ TABLE_ORDER: list[str] = [
 ]
 
 
-def stage_file_locally(src: Path, staging_dir: Path, max_retries: int = 5) -> Path:
-    """Copia arquivo para o SSD local para evitar seek/timeout em storage de rede."""
+def stage_file_locally(src: Path, staging_dir: Path, max_retries: int = 10) -> Path:
+    """Copia arquivo para SSD local com retomada incremental contra stalls de rede."""
     staging_dir.mkdir(parents=True, exist_ok=True)
     dst = staging_dir / f"stage_{src.name}"
 
-    if dst.exists():
-        dst.unlink(missing_ok=True)
-
     expected_size = src.stat().st_size
+
+    if dst.exists() and dst.stat().st_size == expected_size:
+        if dst.suffix.lower() == ".zip":
+            if zipfile.is_zipfile(dst):
+                return dst
+            dst.unlink(missing_ok=True)
+        else:
+            return dst
 
     for attempt in range(1, max_retries + 1):
         try:
-            with open(src, "rb") as f_in, open(dst, "wb") as f_out:
-                while chunk := f_in.read(1048576):  # buffer de 1MB
+            current_size = dst.stat().st_size if dst.exists() else 0
+            if current_size > expected_size:
+                dst.unlink(missing_ok=True)
+                current_size = 0
+
+            with open(src, "rb") as f_in, open(dst, "ab") as f_out:
+                if current_size > 0:
+                    f_in.seek(current_size)
+                while chunk := f_in.read(1048576 * 2):  # buffer de 2MB
                     f_out.write(chunk)
 
             if not dst.exists() or dst.stat().st_size != expected_size:
@@ -151,17 +163,18 @@ def stage_file_locally(src: Path, staging_dir: Path, max_retries: int = 5) -> Pa
                 )
 
             if dst.suffix.lower() == ".zip" and not zipfile.is_zipfile(dst):
+                dst.unlink(missing_ok=True)
                 raise zipfile.BadZipFile(
                     f"Arquivo staged {dst.name} não é um ZIP íntegro."
                 )
 
             return dst
         except Exception as exc:
-            if dst.exists():
-                dst.unlink(missing_ok=True)
             if attempt == max_retries:
+                if dst.exists():
+                    dst.unlink(missing_ok=True)
                 raise
-            delay = min(2**attempt, 30)
+            delay = min(2**attempt, 15)
             logger.warning(
                 "Falha no staging de %s (tentativa %d/%d): %s. Aguardando %ds...",
                 src.name,
