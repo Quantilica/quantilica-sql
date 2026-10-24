@@ -1,42 +1,85 @@
-"""Orquestrador de execução de pipelines declarativos."""
+"""Orquestrador de execução de pipelines declarativos (transform.toml)."""
 
 from __future__ import annotations
 
 import logging
+import tomllib
 from pathlib import Path
 from typing import Any
 
-from quantilica_sql.config import get_settings
 from quantilica_sql.database import get_connection
 from quantilica_sql.plugin_manager import PluginManager
 from quantilica_sql.transform_runner import TransformRunner
 
 logger = logging.getLogger("quantilica_sql.runner")
 
+WORKSPACE_CATALOG = "quantilica-pipelines"
 
-def find_pipeline(pipeline_name: str) -> Path | None:
-    """Busca o pipeline em diretórios locais ou nos plugins instalados."""
-    # 1. Verifica se é caminho direto
-    p = Path(pipeline_name)
-    if p.is_dir() and any(p.glob("*.sql")):
-        return p
 
-    # 2. Busca no repositório de pipelines do workspace se existir
-    workspace_pipeline = Path(f"quantilica-pipelines/{pipeline_name}")
-    if workspace_pipeline.is_dir() and any(workspace_pipeline.glob("*.sql")):
-        return workspace_pipeline
+def _has_transform(path: Path) -> bool:
+    return path.is_dir() and any(path.rglob("transform.toml"))
 
-    # 3. Busca nos plugins instalados
-    mgr = PluginManager()
-    for plug in mgr.list_plugins():
-        target = Path(plug["path"]) / pipeline_name
-        if target.is_dir() and any(target.glob("*.sql")):
-            return target
+
+def _manifest_lookup(root: Path, name: str) -> Path | None:
+    """Resolve ``name`` como id no manifest.toml (``[pipelines.<id>]`` ou
+    ``[[pipeline]]``)."""
+    manifest = root / "manifest.toml"
+    if not manifest.is_file():
+        return None
+    with open(manifest, "rb") as f:
+        data = tomllib.load(f)
+    entry = data.get("pipelines", {}).get(name)
+    if entry is None:
+        entry = next((p for p in data.get("pipeline", []) if p.get("id") == name), None)
+    if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+        return root / entry["path"]
     return None
 
 
-def run_pipeline(pipeline_name: str) -> dict[str, Any]:
-    """Executa um pipeline por nome."""
+def find_pipeline(pipeline_name: str) -> Path | None:
+    """Busca o pipeline como caminho, id/caminho no catálogo do workspace ou
+    nos plugins instalados."""
+    p = Path(pipeline_name)
+    if _has_transform(p):
+        return p
+
+    roots = [Path(WORKSPACE_CATALOG)]
+    roots += [Path(plug["path"]) for plug in PluginManager().list_plugins()]
+    for root in roots:
+        for candidate in (_manifest_lookup(root, pipeline_name), root / pipeline_name):
+            if candidate is not None and _has_transform(candidate):
+                return candidate
+    return None
+
+
+def infer_raw_schema(pipeline_dir: Path) -> str | None:
+    """Schema raw a partir do fetch.toml: ``[[tabelas]]`` → ibge_sidra,
+    ``[[series]]`` → bcb_sgs; cross-domain (``[pipeline]``) → None."""
+    fetch = pipeline_dir / "fetch.toml"
+    if not fetch.is_file():
+        return None
+    with open(fetch, "rb") as f:
+        data = tomllib.load(f)
+    if "tabelas" in data:
+        return "ibge_sidra"
+    if "series" in data:
+        return "bcb_sgs"
+    return None
+
+
+def iter_transform_dirs(root: Path) -> list[Path]:
+    """Ordem de execução do run_subtree: filhos primeiro, depois o próprio dir."""
+    ordered: list[Path] = []
+    for child in sorted(p for p in root.iterdir() if p.is_dir()):
+        if _has_transform(child):
+            ordered.extend(iter_transform_dirs(child))
+    if (root / "transform.toml").is_file():
+        ordered.append(root)
+    return ordered
+
+
+def run_pipeline(pipeline_name: str, raw_schema: str | None = None) -> dict[str, Any]:
+    """Executa os transform.toml de um pipeline (e subpipelines)."""
     pipeline_dir = find_pipeline(pipeline_name)
     if not pipeline_dir:
         raise FileNotFoundError(
@@ -45,17 +88,14 @@ def run_pipeline(pipeline_name: str) -> dict[str, Any]:
         )
 
     logger.info("Executando pipeline em %s...", pipeline_dir)
-    sql_files = list(pipeline_dir.glob("*.sql"))
-    if not sql_files:
-        raise FileNotFoundError(f"Nenhum arquivo SQL encontrado em {pipeline_dir}")
-
-    runner = TransformRunner(get_settings().analytics_schema)
+    materialized: list[str] = []
     with get_connection() as conn:
-        for sql_f in sql_files:
-            runner.execute_sql_file(conn, sql_f)
+        for d in iter_transform_dirs(pipeline_dir):
+            runner = TransformRunner(raw_schema or infer_raw_schema(d))
+            materialized.extend(runner.run_transform_toml(conn, d / "transform.toml"))
 
     return {
         "status": "success",
         "pipeline": pipeline_name,
-        "executed_sql": [f.name for f in sql_files],
+        "materialized": materialized,
     }

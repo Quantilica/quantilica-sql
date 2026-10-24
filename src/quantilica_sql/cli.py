@@ -102,16 +102,23 @@ def cmd_load(
 def cmd_run(
     pipeline: Annotated[
         str,
-        typer.Argument(help="Nome ou caminho do pipeline a executar (ex: macro/ipca)"),
+        typer.Argument(help="Id, nome ou caminho do pipeline (ex: macro/juros)"),
     ],
+    raw_schema: Annotated[
+        str | None,
+        typer.Option(
+            "--raw-schema",
+            help="Schema raw no search_path (default: inferido do fetch.toml)",
+        ),
+    ] = None,
 ) -> None:
     """Executa um pipeline de transformação SQL na camada analytics."""
     console.print(f"[cyan]Executando pipeline analítico:[/cyan] {pipeline}")
     try:
-        res = run_pipeline(pipeline)
+        res = run_pipeline(pipeline, raw_schema=raw_schema)
         console.print(
             f"[green]Pipeline '{pipeline}' executado com sucesso![/green] "
-            f"Scripts aplicados: {', '.join(res['executed_sql'])}"
+            f"Materializados: {', '.join(res['materialized'])}"
         )
     except Exception as exc:
         console.print(f"[red]Erro ao executar pipeline '{pipeline}':[/red] {exc}")
