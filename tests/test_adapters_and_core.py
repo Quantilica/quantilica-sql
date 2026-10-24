@@ -22,9 +22,7 @@ def test_adapters_raise_not_implemented():
         adapter = get_adapter(domain)
         with pytest.raises(NotImplementedError) as exc_info:
             adapter.load(mock_conn)
-        assert adapter.domain in str(exc_info.value) or "não foi" in str(
-            exc_info.value
-        )
+        assert adapter.domain in str(exc_info.value) or "não foi" in str(exc_info.value)
 
 
 def test_ensure_yearly_partition_sql():

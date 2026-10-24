@@ -15,6 +15,7 @@ from quantilica_sql.core.tablespaces import list_tablespaces
 from quantilica_sql.database import get_connection, inspect_schemas
 from quantilica_sql.plugin_manager import PluginManager
 from quantilica_sql.runner import run_pipeline
+from quantilica_sql.scaffold import scaffold_catalog, scaffold_pipeline
 
 app = typer.Typer(
     name="sql",
@@ -178,6 +179,79 @@ def cmd_plugin_install(
     except Exception as exc:
         console.print(f"[red]Erro ao instalar plugin:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+@plugin_app.command("remove")
+def cmd_plugin_remove(
+    alias: Annotated[str, typer.Argument(help="Alias do plugin a remover")],
+) -> None:
+    """Remove um catálogo de pipelines instalado."""
+    mgr = PluginManager()
+    try:
+        removed = mgr.remove(alias)
+        if removed:
+            console.print(f"[green]Plugin '{alias}' removido com sucesso.[/green]")
+        else:
+            console.print(f"[yellow]Plugin '{alias}' não encontrado.[/yellow]")
+    except Exception as exc:
+        console.print(f"[red]Erro ao remover plugin:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
+@app.command("scaffold")
+def cmd_scaffold(
+    name: Annotated[str, typer.Argument(help="Nome do pipeline ou catálogo")],
+    type: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            "-t",
+            help="Tipo de pipeline: ibge, bcb, general (padrão: general)",
+        ),
+    ] = "general",
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--output-dir", "-o", help="Diretório de saída (padrão: cwd)"),
+    ] = None,
+    catalog: Annotated[
+        bool,
+        typer.Option(
+            "--catalog", help="Criar catálogo completo com manifest.toml e README.md"
+        ),
+    ] = False,
+    description: Annotated[
+        str,
+        typer.Option(
+            "--description", "-d", help="Descrição do catálogo (com --catalog)"
+        ),
+    ] = "",
+) -> None:
+    """Gera scaffold de pipeline ou catálogo declarativo.
+
+    Exemplos:
+      quantilica-sql scaffold meu_pipeline --type ibge
+      quantilica-sql scaffold meu_catalogo --catalog --description "Meu catálogo"
+    """
+    target_dir = output_dir or Path.cwd()
+    if catalog:
+        console.print(f"[cyan]Criando catálogo:[/cyan] {name}")
+        try:
+            path = scaffold_catalog(target_dir, name, description)
+            console.print(f"[green]Catálogo criado em:[/green] {path}")
+        except Exception as exc:
+            console.print(f"[red]Erro ao criar catálogo:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
+    else:
+        console.print(f"[cyan]Criando pipeline ({type}):[/cyan] {name}")
+        try:
+            path = scaffold_pipeline(target_dir, name, type)
+            console.print(f"[green]Pipeline criado em:[/green] {path}")
+        except ValueError as exc:
+            console.print(f"[red]Erro de validação:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
+        except Exception as exc:
+            console.print(f"[red]Erro ao criar pipeline:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
 
 
 def main() -> None:
