@@ -16,7 +16,7 @@ class Settings:
 
     database_url: str = field(
         default_factory=lambda: os.environ.get(
-            "DATABASE_URL", "postgresql://localhost:5432/dados"
+            "DATABASE_URL", "postgresql://postgres@localhost:5432/dados"
         )
     )
     storage_root: Path = field(

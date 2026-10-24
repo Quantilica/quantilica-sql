@@ -78,7 +78,11 @@ def iter_transform_dirs(root: Path) -> list[Path]:
     return ordered
 
 
-def run_pipeline(pipeline_name: str, raw_schema: str | None = None) -> dict[str, Any]:
+def run_pipeline(
+    pipeline_name: str,
+    raw_schema: str | None = None,
+    target_schema: str | None = None,
+) -> dict[str, Any]:
     """Executa os transform.toml de um pipeline (e subpipelines)."""
     pipeline_dir = find_pipeline(pipeline_name)
     if not pipeline_dir:
@@ -91,7 +95,9 @@ def run_pipeline(pipeline_name: str, raw_schema: str | None = None) -> dict[str,
     materialized: list[str] = []
     with get_connection() as conn:
         for d in iter_transform_dirs(pipeline_dir):
-            runner = TransformRunner(raw_schema or infer_raw_schema(d))
+            runner = TransformRunner(
+                raw_schema or infer_raw_schema(d), target_schema=target_schema
+            )
             materialized.extend(runner.run_transform_toml(conn, d / "transform.toml"))
 
     return {

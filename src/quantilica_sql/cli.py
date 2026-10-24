@@ -112,11 +112,20 @@ def cmd_run(
             help="Schema raw no search_path (default: inferido do fetch.toml)",
         ),
     ] = None,
+    target_schema: Annotated[
+        str | None,
+        typer.Option(
+            "--target-schema",
+            help="Schema de destino para tabelas/views (sobrescreve analytics)",
+        ),
+    ] = None,
 ) -> None:
     """Executa um pipeline de transformação SQL na camada analytics."""
     console.print(f"[cyan]Executando pipeline analítico:[/cyan] {pipeline}")
     try:
-        res = run_pipeline(pipeline, raw_schema=raw_schema)
+        res = run_pipeline(
+            pipeline, raw_schema=raw_schema, target_schema=target_schema
+        )
         console.print(
             f"[green]Pipeline '{pipeline}' executado com sucesso![/green] "
             f"Materializados: {', '.join(res['materialized'])}"

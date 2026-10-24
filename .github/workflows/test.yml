@@ -1,0 +1,66 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: dados
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          for i in 1 2 3; do
+            if uv sync --group dev --python ${{ matrix.python-version }} \
+                --index https://index.quantilica.com/simple/ \
+                --index-strategy unsafe-best-match; then
+              exit 0
+            fi
+            echo "::warning::uv sync falhou (tentativa $i/3); nova tentativa em 10s"
+            sleep 10
+          done
+          exit 1
+
+      - name: Lint with ruff
+        run: |
+          uv run --no-sync ruff check src/ tests/
+          uv run --no-sync ruff format --check src/ tests/
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/dados
+        run: uv run --no-sync pytest

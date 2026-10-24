@@ -36,7 +36,9 @@ class TableSpec:
         return f"{self.schema}.{self.name}"
 
 
-def load_table_specs(transform_toml: Path) -> list[TableSpec]:
+def load_table_specs(
+    transform_toml: Path, target_schema: str | None = None
+) -> list[TableSpec]:
     """Valida e carrega as entradas ``[[table]]`` de um transform.toml."""
     report = PipelineValidator().validate_transform(transform_toml)
     if not report.ok:
@@ -49,7 +51,7 @@ def load_table_specs(transform_toml: Path) -> list[TableSpec]:
     return [
         TableSpec(
             name=t["name"],
-            schema=t["schema"],
+            schema=target_schema or t["schema"],
             strategy=t["strategy"],
             sql_path=transform_toml.parent / t["sql"],
             primary_key=tuple(t.get("primary_key", ())),
@@ -73,17 +75,22 @@ def _read_query(path: Path) -> sql.SQL:
 class TransformRunner:
     """Executa as entradas de um transform.toml, cada uma em transação própria."""
 
-    def __init__(self, raw_schema: str | None = None) -> None:
+    def __init__(
+        self,
+        raw_schema: str | None = None,
+        target_schema: str | None = None,
+    ) -> None:
         # Schema de origem (raw) colocado no search_path; o destino é sempre
-        # qualificado via ``schema`` de cada [[table]].
+        # qualificado via ``schema`` de cada [[table]] (ou por target_schema).
         self.raw_schema = raw_schema
+        self.target_schema = target_schema
 
     def run_transform_toml(
         self, conn: psycopg.Connection, transform_toml: Path
     ) -> list[str]:
         """Executa todas as entradas; retorna ``schema.name`` das materializadas."""
         done = []
-        for spec in load_table_specs(transform_toml):
+        for spec in load_table_specs(transform_toml, self.target_schema):
             self.run_table(conn, spec)
             done.append(spec.qualified)
         return done
