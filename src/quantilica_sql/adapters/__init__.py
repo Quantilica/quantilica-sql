@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from quantilica_sql.adapters.anac import AnacAdapter
+from quantilica_sql.adapters.anp import AnpAdapter
+from quantilica_sql.adapters.b3 import B3Adapter
 from quantilica_sql.adapters.bcb import BcbAdapter
-from quantilica_sql.adapters.cvm import AnpAdapter, CvmAdapter, InmetAdapter
+from quantilica_sql.adapters.comex import ComexAdapter
+from quantilica_sql.adapters.cvm import CvmAdapter
+from quantilica_sql.adapters.datasus import DatasusAdapter
+from quantilica_sql.adapters.inep import InepAdapter
+from quantilica_sql.adapters.inmet import InmetAdapter
 from quantilica_sql.adapters.pdet import PdetAdapter
 from quantilica_sql.adapters.rfb import RfbAdapter
+from quantilica_sql.adapters.rtn import RtnAdapter
 from quantilica_sql.adapters.sidra import SidraAdapter
+from quantilica_sql.adapters.tesouro_direto import TesouroDiretoAdapter
+from quantilica_sql.adapters.tse import TseAdapter
 
 if TYPE_CHECKING:
     from quantilica_sql.adapters.base import BaseSourceAdapter
@@ -23,6 +33,17 @@ _ADAPTERS: dict[str, type[BaseSourceAdapter]] = {
     "cvm": CvmAdapter,
     "inmet": InmetAdapter,
     "anp": AnpAdapter,
+    "tesouro-direto": TesouroDiretoAdapter,
+    "tesouro_direto": TesouroDiretoAdapter,
+    "tddata": TesouroDiretoAdapter,
+    "rtn": RtnAdapter,
+    "comex": ComexAdapter,
+    "secex-comex": ComexAdapter,
+    "anac": AnacAdapter,
+    "b3": B3Adapter,
+    "datasus": DatasusAdapter,
+    "inep": InepAdapter,
+    "tse": TseAdapter,
 }
 
 

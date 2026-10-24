@@ -1,9 +1,11 @@
-"""Adaptador para microdados trabalhistas do PDET (CAGED e RAIS)."""
+"""Adaptador genérico para microdados trabalhistas do PDET (CAGED e RAIS)."""
 
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +28,9 @@ def _get_table_columns(conn: psycopg.Connection, schema: str, table: str) -> lis
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = %s AND table_name = %s 
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = %s AND table_name = %s
             ORDER BY ordinal_position;
             """,
             (schema, table),
@@ -44,7 +46,7 @@ def _ensure_table(
         cur.execute(
             """
             SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables 
+                SELECT 1 FROM information_schema.tables
                 WHERE table_schema = %s AND table_name = %s
             );
             """,
@@ -96,7 +98,7 @@ class PdetAdapter(BaseSourceAdapter):
                 },
             }
 
-    def load(
+    def _load_single_item(
         self,
         conn: psycopg.Connection,
         source_path: Path | None = None,
@@ -109,8 +111,9 @@ class PdetAdapter(BaseSourceAdapter):
         filename = kwargs.get("filename") or (
             source_path.name if source_path else f"{dataset}_{particao}.csv"
         )
+        force = kwargs.get("force", False)
 
-        if is_file_loaded(
+        if not force and is_file_loaded(
             conn,
             schema=self.schema,
             filename=filename,
@@ -148,7 +151,10 @@ class PdetAdapter(BaseSourceAdapter):
                 columns = existing_cols if existing_cols else list(df.columns)
             _ensure_table(conn, self.schema, table, columns)
 
-            with tempfile.TemporaryDirectory(prefix="pdet_stream_") as tmp_dir:
+            staging_dir = kwargs.get("staging_dir")
+            with tempfile.TemporaryDirectory(
+                prefix="pdet_stream_", dir=staging_dir
+            ) as tmp_dir:
                 tsv_path = Path(tmp_dir) / "stream_copy.tsv"
                 select_exprs = [
                     pl.col(c) if c in df.columns else pl.lit(None).alias(c)
@@ -213,4 +219,98 @@ class PdetAdapter(BaseSourceAdapter):
             particao=particao,
             metadata={"tabela": f"{self.schema}.{table}"},
         )
+        if not conn.autocommit:
+            conn.commit()
         return rows_loaded
+
+    def _load_directory(
+        self,
+        conn: psycopg.Connection,
+        source_dir: Path,
+        **kwargs: Any,
+    ) -> int:
+        if not source_dir.exists():
+            logger.warning("Diretório PDET não encontrado: %s", source_dir)
+            return 0
+
+        force = kwargs.get("force", False)
+        staging_dir = kwargs.get("staging_dir")
+        dataset_filter = kwargs.get("dataset")
+        total_rows = 0
+
+        archives: list[Path] = []
+        for ext in ("*.7z", "*.zip", "*.csv", "*.txt"):
+            archives.extend(source_dir.rglob(ext))
+
+        archives.sort(key=lambda x: x.name)
+        logger.info(
+            "Encontrados %d arquivos PDET para processamento em %s",
+            len(archives),
+            source_dir,
+        )
+
+        for arch in archives:
+            dataset_name = arch.parent.name
+            if dataset_filter and dataset_filter not in dataset_name:
+                continue
+
+            year_val = ""
+            for part in list(arch.parts) + [arch.stem]:
+                digits = re.findall(r"\b(19\d\d|20\d\d)\b", part)
+                if digits:
+                    year_val = digits[-1]
+                    break
+
+            if not force and self.is_file_already_loaded(
+                conn, arch.name, dataset=dataset_name, particao=year_val
+            ):
+                logger.info("  PULANDO %s (já carregado)", arch.name)
+                continue
+
+            t_file = time.time()
+            is_staged = False
+            local_file = arch
+            try:
+                if staging_dir:
+                    local_file = self.stage_file_locally(arch, staging_dir)
+                    is_staged = True
+
+                rows = self._load_single_item(
+                    conn,
+                    source_path=local_file,
+                    filename=arch.name,
+                    dataset=dataset_name,
+                    particao=year_val,
+                    **kwargs,
+                )
+                total_rows += rows
+                logger.info(
+                    "  [pdet] %s: %s linhas em %.2fs",
+                    arch.name,
+                    f"{rows:,}",
+                    time.time() - t_file,
+                )
+            except Exception as exc:
+                logger.error("Erro ao carregar %s: %s", arch.name, exc)
+                if not conn.autocommit:
+                    conn.rollback()
+                raise
+            finally:
+                if is_staged and local_file.exists():
+                    local_file.unlink(missing_ok=True)
+
+        return total_rows
+
+    def load(
+        self,
+        conn: psycopg.Connection,
+        source_path: Path | None = None,
+        **kwargs: Any,
+    ) -> int:
+        if source_path is None and "df" not in kwargs and "rows" not in kwargs:
+            source_path = self.resolve_source_dir()
+
+        if source_path is not None and Path(source_path).is_dir():
+            return self._load_directory(conn, Path(source_path), **kwargs)
+
+        return self._load_single_item(conn, source_path, **kwargs)

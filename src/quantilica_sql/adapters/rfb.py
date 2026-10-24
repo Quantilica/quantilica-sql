@@ -288,12 +288,11 @@ class RfbAdapter(BaseSourceAdapter):
         **kwargs: Any,
     ) -> int:
         if source_path is None and "df" not in kwargs and "rows" not in kwargs:
-            settings = get_settings()
-            default_path = settings.storage_root / "rfb-cnpj"
+            default_path = self.resolve_source_dir()
             if not default_path.exists():
-                alt_path = Path("G:/Meu Drive/quantilica/rfb-cnpj")
-                if alt_path.exists():
-                    default_path = alt_path
+                alt = default_path.parent / "rfb-cnpj"
+                if alt.exists():
+                    default_path = alt
             if default_path.exists():
                 source_path = default_path
 

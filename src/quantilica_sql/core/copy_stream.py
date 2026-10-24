@@ -95,3 +95,61 @@ def copy_from_rows(
         conn.commit()
 
     return rows_copied
+
+
+def copy_from_stream(
+    conn: psycopg.Connection,
+    schema: str,
+    table: str,
+    stream: Any,
+    columns: list[str] | None = None,
+    delimiter: str = ";",
+    null_value: str = "",
+    quote: str = '"',
+    encoding: str = "UTF8",
+    header: bool = False,
+) -> int:
+    """Carrega dados diretamente de um buffer/stream via streaming COPY FROM STDIN."""
+    target_table = sql.SQL("{}.{}").format(
+        sql.Identifier(schema), sql.Identifier(table)
+    )
+    cols_sql = (
+        sql.SQL("({})").format(sql.SQL(", ").join(sql.Identifier(c) for c in columns))
+        if columns
+        else sql.SQL("")
+    )
+    hdr_clause = sql.SQL(", HEADER true") if header else sql.SQL("")
+    copy_sql = sql.SQL(
+        """
+        COPY {} {}
+        FROM STDIN WITH (
+            FORMAT csv,
+            DELIMITER {},
+            NULL {},
+            QUOTE {},
+            ENCODING {}{}
+        );
+        """
+    ).format(
+        target_table,
+        cols_sql,
+        sql.Literal(delimiter),
+        sql.Literal(null_value),
+        sql.Literal(quote),
+        sql.Literal(encoding),
+        hdr_clause,
+    )
+    with conn.cursor() as cur:
+        with cur.copy(copy_sql) as copy:
+            while chunk := stream.read(1024 * 1024):
+                if isinstance(chunk, str):
+                    chunk = chunk.encode(encoding)
+                copy.write(chunk)
+        rows_copied = (
+            cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
+        )
+
+    if not conn.autocommit:
+        conn.commit()
+
+    return rows_copied

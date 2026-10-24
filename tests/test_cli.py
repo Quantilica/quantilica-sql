@@ -31,6 +31,14 @@ def test_supported_domains():
     assert "cvm" in domains
     assert "inmet" in domains
     assert "anp" in domains
+    assert "comex" in domains
+    assert "tesouro_direto" in domains
+    assert "rtn" in domains
+    assert "anac" in domains
+    assert "b3" in domains
+    assert "datasus" in domains
+    assert "inep" in domains
+    assert "tse" in domains
 
 
 def test_adapter_factory():

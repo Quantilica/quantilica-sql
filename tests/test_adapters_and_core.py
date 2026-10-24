@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import polars as pl
-import pytest
 
 from quantilica_sql.adapters import get_adapter
 from quantilica_sql.core.partitions import (
@@ -73,16 +72,32 @@ class MockDbState:
         return mock_conn
 
 
-def test_stub_adapters_raise_not_implemented():
-    """Valida que adaptadores stub levantam NotImplementedError no load."""
+def test_registered_adapters_domains():
+    """Valida que adaptadores registrados possuem domain e schema válidos."""
     mock_conn = MagicMock()
     mock_conn.cursor.return_value.__enter__.return_value = MagicMock()
 
-    for domain in ["cvm", "inmet", "anp"]:
+    all_domains = [
+        "rfb",
+        "cvm",
+        "anp",
+        "inmet",
+        "pdet",
+        "bcb",
+        "sidra",
+        "tesouro_direto",
+        "rtn",
+        "comex",
+        "anac",
+        "b3",
+        "datasus",
+        "inep",
+        "tse",
+    ]
+    for domain in all_domains:
         adapter = get_adapter(domain)
-        with pytest.raises(NotImplementedError) as exc_info:
-            adapter.load(mock_conn)
-        assert adapter.domain in str(exc_info.value) or "não foi" in str(exc_info.value)
+        assert adapter.domain == domain or domain in adapter.domain
+        assert adapter.schema is not None
 
 
 def test_sidra_adapter_load_and_idempotence():
@@ -367,3 +382,393 @@ def test_rfb_adapter_directory_load_and_filter(tmp_path: Path):
     assert rows_all == 2
     assert len(state.recorded) == 2
     assert state.recorded[1][0] == "Empresas1.zip"
+
+
+def test_cvm_adapter_load_csv_and_zip(tmp_path: Path):
+    """Valida carga genérica da CVM com CSV, ZIP e idempotência."""
+    import zipfile
+
+    from quantilica_sql.adapters.cvm import CvmAdapter
+
+    cvm_dir = tmp_path / "cvm"
+    cad_dir = cvm_dir / "cia-cad"
+    dfp_dir = cvm_dir / "dfp"
+    cad_dir.mkdir(parents=True)
+    dfp_dir.mkdir(parents=True)
+
+    # 1. Cria CSV avulso
+    csv_file = cad_dir / "cad_cia_aberta@20261017.csv"
+    csv_file.write_text(
+        "CNPJ_CIA;DENOM_SOCIAL;SIT\n"
+        "00.000.000/0001-91;BANCO DO BRASIL S.A.;ATIVO\n"
+        "33.000.167/0001-01;PETROLEO BRASILEIRO S.A.;ATIVO\n",
+        encoding="latin-1",
+    )
+
+    # 2. Cria ZIP contendo CSV
+    zip_file = dfp_dir / "dfp_cia_aberta_2026.zip"
+    with zipfile.ZipFile(zip_file, "w") as zf:
+        zf.writestr(
+            "dfp_cia_aberta_2026.csv",
+            "CNPJ_CIA;DT_REFER;VERSAO\n00.000.000/0001-91;2026-12-31;1\n".encode(
+                "latin-1"
+            ),
+        )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=2)
+    adapter = CvmAdapter()
+
+    # Primeira execução: deve carregar ambos os arquivos
+    total = adapter.load(mock_conn, source_path=cvm_dir)
+    assert total > 0
+    assert len(state.recorded) == 2
+    filenames = [r[0] for r in state.recorded]
+    assert "cad_cia_aberta@20261017.csv" in filenames
+    assert "dfp_cia_aberta_2026.zip" in filenames
+
+    # Segunda execução: deve pular ambos por idempotência
+    state.recorded.clear()
+    total_repeat = adapter.load(mock_conn, source_path=cvm_dir)
+    assert total_repeat == 0
+    assert len(state.recorded) == 0
+
+
+def test_anp_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica da ANP e skip idempotente."""
+    from quantilica_sql.adapters.anp import AnpAdapter
+
+    anp_dir = tmp_path / "anp"
+    shpc_dir = anp_dir / "shpc-glp"
+    shpc_dir.mkdir(parents=True)
+
+    csv_file = shpc_dir / "precos_glp_2026.csv"
+    csv_file.write_text(
+        "Regiao - Sigla;Estado - Sigla;Municipio;Revenda;Preco de Venda\n"
+        "SE;SP;SAO PAULO;POSTO EXEMPLO LTDA;110,00\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = AnpAdapter()
+
+    rows = adapter.load(mock_conn, source_path=anp_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "precos_glp_2026.csv"
+    assert state.recorded[0][1] == "anp"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    rows_skip = adapter.load(mock_conn, source_path=anp_dir)
+    assert rows_skip == 0
+    assert len(state.recorded) == 0
+
+
+def test_inmet_adapter_load_station_csv(tmp_path: Path):
+    """Valida carga genérica do INMET com extração de metadados e séries."""
+    from quantilica_sql.adapters.inmet import InmetAdapter
+
+    inmet_dir = tmp_path / "inmet"
+    inmet_dir.mkdir(parents=True)
+
+    station_csv = inmet_dir / "INMET_SE_SP_A701_SAO_PAULO_2026.CSV"
+    station_content = (
+        "REGIAO:;SE\n"
+        "UF:;SP\n"
+        "ESTACAO:;SAO PAULO - MIRANTE DE SANTANA\n"
+        "CODIGO (WMO):;A701\n"
+        "LATITUDE:;-23,496\n"
+        "LONGITUDE:;-46,620\n"
+        "ALTITUDE:;792,06\n"
+        "DATA DE FUNDACAO:;01/01/2006\n"
+        "Data;Hora UTC;PRECIPITACAO TOTAL;TEMPERATURA DO AR\n"
+        "2026/01/01;0000 UTC;0,0;22,4\n"
+        "2026/01/01;0100 UTC;0,0;21,8\n"
+    )
+    station_csv.write_text(station_content, encoding="latin-1")
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=2)
+    adapter = InmetAdapter()
+
+    rows = adapter.load(mock_conn, source_path=inmet_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == station_csv.name
+    assert state.recorded[0][1] == "inmet"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    rows_skip = adapter.load(mock_conn, source_path=inmet_dir)
+    assert rows_skip == 0
+    assert len(state.recorded) == 0
+
+
+def test_tesouro_direto_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica de títulos do Tesouro Direto e idempotência."""
+    from quantilica_sql.adapters.tesouro_direto import TesouroDiretoAdapter
+
+    td_dir = tmp_path / "tesouro_direto"
+    td_dir.mkdir(parents=True)
+    csv_file = td_dir / "tesouro_direto_2026.csv"
+    csv_file.write_text(
+        "Tipo Titulo;Data Vencimento;Data Base;Taxa Compra Manha;"
+        "Taxa Venda Manha;PU Compra Manha\n"
+        "Tesouro Selic;01/01/2029;24/10/2026;0,00;0,05;15000,00\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = TesouroDiretoAdapter()
+
+    rows = adapter.load(mock_conn, source_path=td_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "tesouro_direto_2026.csv"
+    assert state.recorded[0][1] == "tesouro_direto"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=td_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_rtn_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica de relatórios do RTN e idempotência."""
+    from quantilica_sql.adapters.rtn import RtnAdapter
+
+    rtn_dir = tmp_path / "rtn"
+    rtn_dir.mkdir(parents=True)
+    csv_file = rtn_dir / "resultado_tesouro_nacional_2026.csv"
+    csv_file.write_text(
+        "Rubrica;Ano;Mes;Valor\nRECEITA TOTAL;2026;10;150000.50\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = RtnAdapter()
+
+    rows = adapter.load(mock_conn, source_path=rtn_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "resultado_tesouro_nacional_2026.csv"
+    assert state.recorded[0][1] == "rtn"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=rtn_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_comex_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica de dados do Comex Stat e idempotência."""
+    from quantilica_sql.adapters.comex import ComexAdapter
+
+    comex_dir = tmp_path / "comex"
+    comex_dir.mkdir(parents=True)
+    csv_file = comex_dir / "EXP_2026.csv"
+    csv_file.write_text(
+        "CO_ANO;CO_MES;CO_NCM;CO_UNID;CO_PAIS;SG_UF_NCM;CO_VIA;CO_URF;QT_ESTAT;KG_LIQUIDO;VL_FOB\n"
+        "2026;10;12019000;10;105;MT;01;0817800;1000;1000;500\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = ComexAdapter()
+
+    rows = adapter.load(mock_conn, source_path=comex_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "EXP_2026.csv"
+    assert state.recorded[0][1] == "comex"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=comex_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_anac_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica de voos da ANAC e idempotência."""
+    from quantilica_sql.adapters.anac import AnacAdapter
+
+    anac_dir = tmp_path / "anac"
+    anac_dir.mkdir(parents=True)
+    csv_file = anac_dir / "VRA_202610.csv"
+    csv_file.write_text(
+        "ICAO Empresa Aerea;Numero Voo;Codigo DI;Codigo Tipo Linha;"
+        "ICAO Aerodromo Origem;ICAO Aerodromo Destino\n"
+        "GLO;1234;0;N;SBBR;SBSP\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = AnacAdapter()
+
+    rows = adapter.load(mock_conn, source_path=anac_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "VRA_202610.csv"
+    assert state.recorded[0][1] == "anac"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=anac_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_b3_adapter_load_cotahist_and_skip(tmp_path: Path):
+    """Valida carga e parsing posicional de arquivo COTAHIST da B3."""
+    from quantilica_sql.adapters.b3 import B3Adapter
+
+    b3_dir = tmp_path / "b3"
+    b3_dir.mkdir(parents=True)
+    cot_file = b3_dir / "COTAHIST_A2026.TXT"
+
+    line_01 = (
+        "01"
+        "20261024"
+        "02"
+        "PETR4       "
+        "010"
+        "PETROBRAS   "
+        "PN          "
+        "   "
+        "R$  "
+        "0000000003500"
+        "0000000003600"
+        "0000000003450"
+        "0000000003550"
+        "0000000003580"
+        "0000000003570"
+        "0000000003580"
+        "05000"
+        "000000000010000000"
+        "00000000358000000"
+        "0000000000000"
+        "0"
+        "99991231"
+        "0000001"
+        "0000000000000"
+        "BRPETRACNPR6"
+        "100"
+    )
+    content = (
+        f"00COTAHIST.2026BOVESPA 20261024\n{line_01}\n"
+        f"99COTAHIST.2026BOVESPA 0000000001\n"
+    )
+    cot_file.write_text(content, encoding="latin-1")
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = B3Adapter()
+
+    rows = adapter.load(mock_conn, source_path=b3_dir)
+    assert rows == 1
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "COTAHIST_A2026.TXT"
+    assert state.recorded[0][1] == "b3"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=b3_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_datasus_adapter_load_csv_and_skip(tmp_path: Path):
+    """Valida carga genérica de microdados do DATASUS e idempotência."""
+    from quantilica_sql.adapters.datasus import DatasusAdapter
+
+    datasus_dir = tmp_path / "datasus"
+    datasus_dir.mkdir(parents=True)
+    csv_file = datasus_dir / "DO2026.csv"
+    csv_file.write_text(
+        "NUMERODO;DTOBITO;CAUSABAS;IDADE\n12345678;24102026;I219;65\n",
+        encoding="latin-1",
+    )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = DatasusAdapter()
+
+    rows = adapter.load(mock_conn, source_path=datasus_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "DO2026.csv"
+    assert state.recorded[0][1] == "datasus"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=datasus_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_inep_adapter_load_zip_and_skip(tmp_path: Path):
+    """Valida carga genérica de microdados do INEP contidos em ZIP e idempotência."""
+    import zipfile
+
+    from quantilica_sql.adapters.inep import InepAdapter
+
+    inep_dir = tmp_path / "inep"
+    inep_dir.mkdir(parents=True)
+    zip_file = inep_dir / "microdados_enem_2026.zip"
+    with zipfile.ZipFile(zip_file, "w") as zf:
+        zf.writestr(
+            "DADOS/MICRODADOS_ENEM_2026.csv",
+            "NU_INSCRICAO;NU_ANO;TP_SEXO;NOTA_CN\n1001;2026;M;650.5\n".encode(
+                "latin-1"
+            ),
+        )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = InepAdapter()
+
+    rows = adapter.load(mock_conn, source_path=inep_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "microdados_enem_2026.zip"
+    assert state.recorded[0][1] == "inep"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=inep_dir) == 0
+    assert len(state.recorded) == 0
+
+
+def test_tse_adapter_load_zip_and_skip(tmp_path: Path):
+    """Valida carga genérica de dados eleitorais do TSE e idempotência."""
+    import zipfile
+
+    from quantilica_sql.adapters.tse import TseAdapter
+
+    tse_dir = tmp_path / "tse"
+    tse_dir.mkdir(parents=True)
+    zip_file = tse_dir / "consulta_cand_2026_SP.zip"
+    with zipfile.ZipFile(zip_file, "w") as zf:
+        zf.writestr(
+            "consulta_cand_2026_SP.csv",
+            "ANO_ELEICAO;SG_UF;DS_CARGO;NM_CANDIDATO\n"
+            "2026;SP;GOVERNADOR;CANDIDATO TESTE\n".encode("latin-1"),
+        )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=1)
+    adapter = TseAdapter()
+
+    rows = adapter.load(mock_conn, source_path=tse_dir)
+    assert rows > 0
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "consulta_cand_2026_SP.zip"
+    assert state.recorded[0][1] == "tse"
+
+    # Segunda execução (skip)
+    state.recorded.clear()
+    assert adapter.load(mock_conn, source_path=tse_dir) == 0
+    assert len(state.recorded) == 0
