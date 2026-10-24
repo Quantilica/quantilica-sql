@@ -416,9 +416,41 @@ class RfbAdapter(BaseSourceAdapter):
                         if rows_loaded == 0 and n_rows > 0:
                             rows_loaded = n_rows
                 except ImportError:
-                    logger.warning(
-                        "rfb_cnpj_fetcher não disponível para extração direta de ZIP."
+                    logger.info(
+                        "rfb_cnpj_fetcher ausente; usando transcodificação nativa."
                     )
+                    import io
+
+                    staging_dir = kwargs.get("staging_dir")
+                    with tempfile.TemporaryDirectory(
+                        prefix="rfb_zip_std_", dir=staging_dir
+                    ) as tmp_dir:
+                        tmp_csv = Path(tmp_dir) / f"{part_name}_{source_path.stem}.csv"
+                        with zipfile.ZipFile(source_path) as z:
+                            members = [m for m in z.namelist() if not m.endswith("/")]
+                            if members:
+                                with (
+                                    z.open(members[0]) as raw,
+                                    open(
+                                        tmp_csv, "w", encoding="utf-8", newline=""
+                                    ) as out,
+                                ):
+                                    text_in = io.TextIOWrapper(
+                                        raw, encoding="latin-1", newline=""
+                                    )
+                                    for line in text_in:
+                                        out.write(line.replace("\x00", ""))
+
+                        if tmp_csv.exists() and tmp_csv.stat().st_size > 0:
+                            rows_loaded = copy_from_file(
+                                conn,
+                                schema=self.schema,
+                                table=part_name,
+                                file_path=tmp_csv,
+                                columns=cols,
+                                delimiter=";",
+                                null_value="",
+                            )
             else:
                 rows_loaded = copy_from_file(
                     conn,
