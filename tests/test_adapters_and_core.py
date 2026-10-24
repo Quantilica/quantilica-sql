@@ -59,6 +59,11 @@ class MockDbState:
                 mock_cur.fetchone.return_value = (True,)
             elif "SELECT count(*)" in q_str:
                 mock_cur.fetchone.return_value = (1, 100)
+            elif "SELECT nome_arquivo" in q_str:
+                part = params[0] if params else ""
+                mock_cur.fetchall.return_value = [
+                    (fn,) for fn, ds, p in self.loaded_files if p == part
+                ]
             elif "SELECT dataset, count(*)" in q_str:
                 mock_cur.fetchall.return_value = [("caged", 1, 100)]
             elif "SELECT column_name FROM information_schema.columns" in q_str:
@@ -298,3 +303,67 @@ def test_ensure_monthly_partition_sql():
     call_sql = create_calls[0][0][0].as_string()
     assert 'PARTITION OF "rfb_cnpj"."estabelecimentos"' in call_sql
     assert "FOR VALUES FROM ('2026-10-01') TO ('2026-11-01')" in call_sql
+
+
+def test_rfb_adapter_directory_load_and_filter(tmp_path: Path):
+    """Valida carga de diretório com filtro de grupo e staging no RfbAdapter."""
+    import zipfile
+
+    from quantilica_sql.adapters.rfb import RfbAdapter
+
+    comp_dir = tmp_path / "2026-10"
+    cnaes_dir = comp_dir / "cnaes"
+    empresas_dir = comp_dir / "empresas"
+    cnaes_dir.mkdir(parents=True)
+    empresas_dir.mkdir(parents=True)
+
+    # Cria ZIP dummy para cnaes
+    cnaes_zip = cnaes_dir / "Cnaes1.zip"
+    with zipfile.ZipFile(cnaes_zip, "w") as zf:
+        zf.writestr(
+            "cnaes.csv",
+            '"0111301";"Cultivo de arroz"\n"0111302";"Cultivo de milho"\n'.encode(
+                "latin-1"
+            ),
+        )
+
+    # Cria ZIP dummy para empresas
+    empresas_zip = empresas_dir / "Empresas1.zip"
+    with zipfile.ZipFile(empresas_zip, "w") as zf:
+        zf.writestr(
+            "empresas.csv",
+            '"12345678";"EMPRESA TESTE LTDA";"2062";"49";"10000,00";"01";""\n'.encode(
+                "latin-1"
+            ),
+        )
+
+    state = MockDbState()
+    mock_conn = state.make_conn(rowcount=2)
+    adapter = RfbAdapter()
+
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+
+    # 1. Carrega apenas grupo 'cnaes'
+    rows_cnaes = adapter.load(
+        mock_conn,
+        source_path=tmp_path,
+        competencia="2026-10",
+        table="cnaes",
+        staging_dir=staging_dir,
+    )
+    assert rows_cnaes == 2
+    assert len(state.recorded) == 1
+    assert state.recorded[0][0] == "Cnaes1.zip"
+    assert state.recorded[0][2] == "2026-10"
+
+    # 2. Carrega tudo (cnaes deve ser pulado por idempotência, empresas deve carregar)
+    rows_all = adapter.load(
+        mock_conn,
+        source_path=tmp_path,
+        competencia="2026-10",
+        staging_dir=staging_dir,
+    )
+    assert rows_all == 2
+    assert len(state.recorded) == 2
+    assert state.recorded[1][0] == "Empresas1.zip"

@@ -52,3 +52,16 @@ def test_settings_normalization():
     settings = get_settings()
     url = settings.normalize_db_url()
     assert not url.startswith("postgresql+psycopg://")
+
+
+def test_cli_load_flags():
+    """Valida flags de carga no comando 'load'."""
+    result = runner.invoke(app, ["load", "--help"])
+    assert result.exit_code == 0
+    assert "--source-path" in result.output
+    assert "--competencia" in result.output
+    assert "--all" in result.output
+    assert "--table" in result.output
+    assert "--tablespace" in result.output
+    assert "--staging-dir" in result.output
+    assert "--force" in result.output

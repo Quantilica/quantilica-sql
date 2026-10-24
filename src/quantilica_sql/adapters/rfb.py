@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
+import time
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +15,7 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.config import get_settings
 from quantilica_sql.core.copy_stream import copy_from_file, copy_from_rows
 from quantilica_sql.core.tracker import (
     ensure_tracker_table,
@@ -110,6 +114,65 @@ TABLE_SCHEMAS: dict[str, list[str]] = {
     ],
 }
 
+TABLE_ORDER: list[str] = [
+    "cnaes",
+    "motivos",
+    "municipios",
+    "naturezas",
+    "paises",
+    "qualificacoes",
+    "simples",
+    "socios",
+    "empresas",
+    "estabelecimentos",
+]
+
+
+def stage_file_locally(src: Path, staging_dir: Path, max_retries: int = 5) -> Path:
+    """Copia arquivo para o SSD local para evitar seek/timeout em storage de rede."""
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    dst = staging_dir / f"stage_{src.name}"
+
+    if dst.exists():
+        dst.unlink(missing_ok=True)
+
+    expected_size = src.stat().st_size
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with open(src, "rb") as f_in, open(dst, "wb") as f_out:
+                while chunk := f_in.read(1048576):  # buffer de 1MB
+                    f_out.write(chunk)
+
+            if not dst.exists() or dst.stat().st_size != expected_size:
+                actual = dst.stat().st_size if dst.exists() else 0
+                raise OSError(
+                    f"Tamanho copiado ({actual}) difere do esperado ({expected_size})"
+                )
+
+            if dst.suffix.lower() == ".zip" and not zipfile.is_zipfile(dst):
+                raise zipfile.BadZipFile(
+                    f"Arquivo staged {dst.name} não é um ZIP íntegro."
+                )
+
+            return dst
+        except Exception as exc:
+            if dst.exists():
+                dst.unlink(missing_ok=True)
+            if attempt == max_retries:
+                raise
+            delay = min(2**attempt, 30)
+            logger.warning(
+                "Falha no staging de %s (tentativa %d/%d): %s. Aguardando %ds...",
+                src.name,
+                attempt,
+                max_retries,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+    return dst
+
 
 class RfbAdapter(BaseSourceAdapter):
     """Adaptador de carga para dados de CNPJs da Receita Federal."""
@@ -206,6 +269,27 @@ class RfbAdapter(BaseSourceAdapter):
         return part_name
 
     def load(
+        self,
+        conn: psycopg.Connection,
+        source_path: Path | None = None,
+        **kwargs: Any,
+    ) -> int:
+        if source_path is None and "df" not in kwargs and "rows" not in kwargs:
+            settings = get_settings()
+            default_path = settings.storage_root / "rfb-cnpj"
+            if not default_path.exists():
+                alt_path = Path("G:/Meu Drive/quantilica/rfb-cnpj")
+                if alt_path.exists():
+                    default_path = alt_path
+            if default_path.exists():
+                source_path = default_path
+
+        if source_path is not None and source_path.is_dir():
+            return self._load_directory(conn, source_path, **kwargs)
+
+        return self._load_single_item(conn, source_path, **kwargs)
+
+    def _load_single_item(
         self,
         conn: psycopg.Connection,
         source_path: Path | None = None,
@@ -364,4 +448,170 @@ class RfbAdapter(BaseSourceAdapter):
             particao=competencia,
             metadata={"tabela": table_name},
         )
+        if not conn.autocommit:
+            conn.commit()
         return rows_loaded
+
+    def _load_directory(
+        self,
+        conn: psycopg.Connection,
+        source_dir: Path,
+        **kwargs: Any,
+    ) -> int:
+        """Processa competências e arquivos ZIP de um diretório da RFB."""
+        settings = get_settings()
+        tablespace = kwargs.get("tablespace") or settings.tablespace_rfb
+        if tablespace == "pg_default":
+            tablespace = ""
+        force = kwargs.get("force", False)
+
+        staging_dir_opt = kwargs.get("staging_dir")
+        staging_dir = (
+            Path(staging_dir_opt)
+            if staging_dir_opt
+            else (settings.staging_dir / "rfb_staging")
+        )
+        staging_dir.mkdir(parents=True, exist_ok=True)
+
+        comp_dirs: list[Path] = []
+        if re.match(r"^\d{4}-\d{2}$", source_dir.name):
+            comp_dirs = [source_dir]
+        else:
+            all_comps = sorted(
+                [
+                    d
+                    for d in source_dir.iterdir()
+                    if d.is_dir() and re.match(r"^\d{4}-\d{2}$", d.name)
+                ]
+            )
+            if all_comps:
+                if kwargs.get("all_partitions") or kwargs.get("all"):
+                    comp_dirs = all_comps
+                elif comp_filter := kwargs.get("competencia"):
+                    req = [c.strip() for c in comp_filter.split(",") if c.strip()]
+                    comp_dirs = [d for d in all_comps if d.name in req]
+                else:
+                    comp_dirs = [all_comps[-1]]
+            else:
+                comp_dirs = [source_dir]
+
+        total_rows = 0
+        total_files = 0
+        t0_all = time.time()
+
+        for comp_dir in comp_dirs:
+            comp = (
+                comp_dir.name
+                if re.match(r"^\d{4}-\d{2}$", comp_dir.name)
+                else (kwargs.get("competencia") or "2026-10")
+            )
+            logger.info("============================================================")
+            logger.info("Iniciando Competência RFB: %s", comp)
+            logger.info("============================================================")
+
+            table_arg = (
+                kwargs.get("table") or kwargs.get("table_name") or kwargs.get("group")
+            )
+            if table_arg:
+                target_groups = [table_arg] if table_arg in TABLE_SCHEMAS else []
+            else:
+                target_groups = TABLE_ORDER
+
+            loaded_files: set[str] = set()
+            if not force:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT nome_arquivo
+                        FROM rfb_cnpj.arquivo_carregado
+                        WHERE dataset = 'rfb_cnpj' AND particao = %s;
+                        """,
+                        (comp,),
+                    )
+                    loaded_files = {r[0] for r in cur.fetchall()}
+
+            for group in target_groups:
+                zip_files: list[Path] = []
+                g_dir = comp_dir / group
+                if g_dir.is_dir():
+                    zip_files.extend(sorted(g_dir.glob("*.zip")))
+                else:
+                    for f in sorted(comp_dir.glob("*.zip")):
+                        if group in f.name.lower():
+                            zip_files.append(f)
+
+                if not zip_files:
+                    continue
+
+                part_name = self.ensure_partition(
+                    conn, group, comp, tablespace=tablespace
+                )
+                logger.info(
+                    "  -> Grupo '%s': %d arquivos para partição '%s.%s'",
+                    group,
+                    len(zip_files),
+                    self.schema,
+                    part_name,
+                )
+
+                for zf in zip_files:
+                    if not force and zf.name in loaded_files:
+                        logger.info(
+                            "    PULANDO [%s] %s (já carregado)", group, zf.name
+                        )
+                        continue
+
+                    local_zip = zf
+                    is_staged = False
+                    try:
+                        if zf.parent.resolve() != staging_dir.resolve():
+                            local_zip = stage_file_locally(zf, staging_dir)
+                            is_staged = True
+
+                        t_file0 = time.time()
+                        rows = self._load_single_item(
+                            conn,
+                            source_path=local_zip,
+                            filename=zf.name,
+                            table_name=group,
+                            competencia=comp,
+                            staging_dir=staging_dir,
+                            force=force,
+                            tablespace=tablespace,
+                        )
+                        elapsed_f = time.time() - t_file0
+                        total_rows += rows
+                        total_files += 1
+                        loaded_files.add(zf.name)
+                        logger.info(
+                            "    [%s] %s: %s linhas em %.2fs",
+                            group,
+                            zf.name,
+                            f"{rows:,}",
+                            elapsed_f,
+                        )
+                    except Exception as exc:
+                        logger.error("Erro ao carregar %s: %s", zf.name, exc)
+                        if not conn.autocommit:
+                            conn.rollback()
+                        raise
+                    finally:
+                        if is_staged and local_zip.exists():
+                            for _ in range(5):
+                                try:
+                                    local_zip.unlink(missing_ok=True)
+                                    break
+                                except PermissionError:
+                                    time.sleep(0.5)
+
+        elapsed_total = time.time() - t0_all
+        logger.info("============================================================")
+        logger.info(
+            "Carga RFB Concluída: %d arquivos, %s linhas em %.1fs (%.2f min)",
+            total_files,
+            f"{total_rows:,}",
+            elapsed_total,
+            elapsed_total / 60,
+        )
+        logger.info("============================================================")
+        return total_rows

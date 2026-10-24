@@ -74,12 +74,53 @@ def cmd_load(
     ],
     source_path: Annotated[
         str | None,
-        typer.Option("--source-path", "-s", help="Caminho do arquivo ou diretório"),
+        typer.Option(
+            "--source-path", "-s", help="Caminho do arquivo ou diretório raiz"
+        ),
     ] = None,
     competencia: Annotated[
         str | None,
-        typer.Option("--competencia", "-c", help="Competência (YYYY-MM ou YYYY)"),
+        typer.Option(
+            "--competencia",
+            "-c",
+            help="Competência (YYYY-MM ou lista por vírgula)",
+        ),
     ] = None,
+    all_partitions: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            "-a",
+            help="Carrega todas as competências/partições disponíveis no diretório",
+        ),
+    ] = False,
+    table: Annotated[
+        str | None,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Filtra por tabela/grupo específico (ex: empresas, estabelecimentos)",
+        ),
+    ] = None,
+    tablespace: Annotated[
+        str,
+        typer.Option("--tablespace", help="Tablespace no PostgreSQL (ex: ts_rfb)"),
+    ] = "",
+    staging_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--staging-dir",
+            help="Diretório SSD local para staging de arquivos grandes",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Força recarga mesmo se já registrado em arquivo_carregado",
+        ),
+    ] = False,
 ) -> None:
     """Executa a rotina de carga para uma fonte de dados no PostgreSQL."""
     try:
@@ -89,8 +130,18 @@ def cmd_load(
             f"[dim](schema: {adapter.schema})[/dim]"
         )
         path_obj = Path(source_path) if source_path else None
+        staging_obj = Path(staging_dir) if staging_dir else None
         with get_connection(autocommit=True) as conn:
-            rows = adapter.load(conn, path_obj, competencia=competencia)
+            rows = adapter.load(
+                conn,
+                path_obj,
+                competencia=competencia,
+                all_partitions=all_partitions,
+                table=table,
+                tablespace=tablespace,
+                staging_dir=staging_obj,
+                force=force,
+            )
             console.print(
                 f"[green]Carga concluída![/green] {rows:,} linhas processadas."
             )
