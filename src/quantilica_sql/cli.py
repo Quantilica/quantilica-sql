@@ -123,9 +123,7 @@ def cmd_run(
     """Executa um pipeline de transformação SQL na camada analytics."""
     console.print(f"[cyan]Executando pipeline analítico:[/cyan] {pipeline}")
     try:
-        res = run_pipeline(
-            pipeline, raw_schema=raw_schema, target_schema=target_schema
-        )
+        res = run_pipeline(pipeline, raw_schema=raw_schema, target_schema=target_schema)
         console.print(
             f"[green]Pipeline '{pipeline}' executado com sucesso![/green] "
             f"Materializados: {', '.join(res['materialized'])}"
