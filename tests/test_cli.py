@@ -56,12 +56,15 @@ def test_settings_normalization():
 
 def test_cli_load_flags():
     """Valida flags de carga no comando 'load'."""
-    result = runner.invoke(app, ["load", "--help"], color=False)
+    import re
+
+    result = runner.invoke(app, ["load", "--help"], env={"COLUMNS": "120"})
     assert result.exit_code == 0
-    assert "source-path" in result.output
-    assert "competencia" in result.output
-    assert "all" in result.output
-    assert "table" in result.output
-    assert "tablespace" in result.output
-    assert "staging-dir" in result.output
-    assert "force" in result.output
+    clean = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", result.output)
+    assert "source-path" in clean
+    assert "competencia" in clean
+    assert "all" in clean
+    assert "table" in clean
+    assert "tablespace" in clean
+    assert "staging-dir" in clean
+    assert "force" in clean
