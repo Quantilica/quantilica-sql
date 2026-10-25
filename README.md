@@ -32,7 +32,7 @@ quantilica sql run macro/ipca
 
 # Carga sob demanda de uma partição
 quantilica sql load rfb --competencia 2023-10
-quantilica sql load pdet --datasets rais-vinculos
+quantilica sql load pdet -s ./data/pdet
 
 # Gestão de catálogos e plugins
 quantilica sql plugin list
