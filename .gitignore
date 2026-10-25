@@ -20,6 +20,9 @@ htmlcov/
 .ruff_cache/
 .mypy_cache/
 
+# Bibliotecas não versionam o lockfile
+uv.lock
+
 # Local config / IDE
 .env
 .vscode/

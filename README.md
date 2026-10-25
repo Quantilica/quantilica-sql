@@ -13,11 +13,11 @@ Como plugin do `quantilica-cli`:
 quantilica install sql
 ```
 
-Ou diretamente no seu ambiente Python:
+Ou diretamente no seu projeto Python (o pacote é distribuído pelo índice da Quantilica, não pelo PyPI):
 ```bash
-uv add quantilica-sql
+uv add quantilica-sql --index https://index.quantilica.com/simple/
 # ou com suporte a polars para leituras complexas:
-uv add "quantilica-sql[analysis]"
+uv add "quantilica-sql[analysis]" --index https://index.quantilica.com/simple/
 ```
 
 ## Uso
@@ -39,7 +39,7 @@ quantilica sql plugin list
 quantilica sql plugin install https://github.com/Quantilica/quantilica-pipelines.git
 ```
 
-### Execução Standalone (para workers, cron e Docker)
+### Execução standalone (scripts, agendadores e contêineres)
 ```bash
 quantilica-sql status
 quantilica-sql run macro/ipca
