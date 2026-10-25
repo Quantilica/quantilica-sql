@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quantilica-sql"
-version = "0.1.0"
+version = "0.1.1"
 description = "Motor unificado de ingestão, particionamento e pipelines analíticos no PostgreSQL para o ecossistema Quantilica"
 readme = "README.md"
 authors = [
