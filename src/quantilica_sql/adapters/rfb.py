@@ -10,7 +10,6 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-import polars as pl
 import psycopg
 from psycopg import sql
 
@@ -389,6 +388,7 @@ class RfbAdapter(BaseSourceAdapter):
         elif source_path is not None and source_path.exists():
             if source_path.suffix.lower() == ".zip":
                 try:
+                    import polars as pl
                     from rfb_cnpj_fetcher.reader import LAYOUTS, _read_text_frame
 
                     frame = _read_text_frame(source_path, LAYOUTS[table_name])
