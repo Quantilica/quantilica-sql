@@ -22,6 +22,11 @@ logger = logging.getLogger("quantilica_sql.adapters.datasus")
 class DatasusAdapter(BaseSourceAdapter):
     """Adaptador de carga para acervos de microdados de saúde do DATASUS."""
 
+    deprecated = (
+        "A carga em produção desta fonte usa importadores dedicados; este"
+        " adaptador está congelado e não deve receber novas cargas."
+    )
+
     @property
     def domain(self) -> str:
         return "datasus"

@@ -22,6 +22,12 @@ logger = logging.getLogger("quantilica_sql.adapters.tesouro_direto")
 class TesouroDiretoAdapter(BaseSourceAdapter):
     """Adaptador de carga para vendas, resgates e investidores do Tesouro Direto."""
 
+    deprecated = (
+        "Os microdados desta fonte saem do PostgreSQL e passam a viver em"
+        " Parquet (extra 'lake'): use `quantilica sql lake convert "
+        "tesouro-direto`. Este adaptador está congelado."
+    )
+
     @property
     def domain(self) -> str:
         return "tesouro_direto"

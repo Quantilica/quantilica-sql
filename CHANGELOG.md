@@ -36,6 +36,10 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - INMET: o skip passou a consultar o ledger com a mesma partição (ano) com que registra (antes nunca encontrava o arquivo e recarregava sempre), e `_arquivo` passa a ser o arquivo de origem (o ZIP), não o membro.
 - B3: `_arquivo` e o ledger usam o nome do arquivo original, não o do arquivo em staging.
 
+### Obsoleto
+- Adaptadores `pdet`, `rfb` e `tesouro_direto`: os microdados saem do PostgreSQL e passam a viver em Parquet (extra `lake`). `get_adapter` emite `FutureWarning`; o contrato de carga deles não será mais evoluído.
+- Adaptadores `rtn` e `datasus`: a carga em produção usa importadores dedicados; ficam congelados.
+
 ### Corrigido
 - ANP, ANAC, COMEX, DATASUS, RTN, Tesouro Direto, INEP e TSE carregavam a linha de cabeçalho do CSV como dado (`copy_from_file` não tinha `HEADER`). Adicionado o parâmetro `header`, usado por esses adaptadores. O defeito existe na 0.1.0/0.1.1.
 

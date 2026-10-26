@@ -8,7 +8,7 @@ import time
 import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import psycopg
 from psycopg import sql
@@ -30,6 +30,9 @@ logger = logging.getLogger("quantilica_sql.adapters.base")
 
 class BaseSourceAdapter(ABC):
     """Contrato abstrato que cada fonte deve implementar para cargas no PostgreSQL."""
+
+    # Motivo da obsolescência; ``get_adapter`` avisa quando preenchido.
+    deprecated: ClassVar[str | None] = None
 
     @property
     @abstractmethod

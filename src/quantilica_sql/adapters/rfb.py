@@ -190,6 +190,12 @@ def stage_file_locally(src: Path, staging_dir: Path, max_retries: int = 10) -> P
 class RfbAdapter(BaseSourceAdapter):
     """Adaptador de carga para dados de CNPJs da Receita Federal."""
 
+    deprecated = (
+        "Os microdados desta fonte saem do PostgreSQL e passam a viver em"
+        " Parquet (extra 'lake'): use `quantilica sql lake convert rfb-"
+        "cnpj`. Este adaptador está congelado."
+    )
+
     @property
     def domain(self) -> str:
         return "rfb"

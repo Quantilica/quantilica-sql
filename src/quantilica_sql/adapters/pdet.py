@@ -65,6 +65,12 @@ def _ensure_table(
 class PdetAdapter(BaseSourceAdapter):
     """Adaptador de carga para microdados da RAIS e CAGED."""
 
+    deprecated = (
+        "Os microdados desta fonte saem do PostgreSQL e passam a viver em"
+        " Parquet (extra 'lake'): use `quantilica sql lake convert pdet`."
+        " Este adaptador está congelado."
+    )
+
     @property
     def domain(self) -> str:
         return "pdet"

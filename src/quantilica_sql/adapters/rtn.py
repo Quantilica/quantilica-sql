@@ -22,6 +22,11 @@ logger = logging.getLogger("quantilica_sql.adapters.rtn")
 class RtnAdapter(BaseSourceAdapter):
     """Adaptador de carga para séries fiscais e demonstrativos do RTN no PostgreSQL."""
 
+    deprecated = (
+        "A carga em produção desta fonte usa importadores dedicados; este"
+        " adaptador está congelado e não deve receber novas cargas."
+    )
+
     @property
     def domain(self) -> str:
         return "rtn"

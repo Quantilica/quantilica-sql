@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from typer.testing import CliRunner
 
 from quantilica_sql.adapters import get_adapter, list_supported_domains
@@ -124,3 +125,16 @@ def test_cli_lake_convert_e_status(tmp_path):
 
     desconhecida = runner.invoke(app, ["lake", "convert", "inexistente"])
     assert desconhecida.exit_code == 2
+
+
+def test_get_adapter_avisa_adaptadores_obsoletos():
+    import warnings
+
+    from quantilica_sql.adapters import get_adapter
+
+    for dominio in ("pdet", "rfb-cnpj", "tesouro-direto", "rtn", "datasus"):
+        with pytest.warns(FutureWarning, match="obsoleto"):
+            get_adapter(dominio)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        get_adapter("anp")

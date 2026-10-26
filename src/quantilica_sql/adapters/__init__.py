@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 from quantilica_sql.adapters.anac import AnacAdapter
@@ -55,6 +56,12 @@ def get_adapter(domain: str) -> BaseSourceAdapter:
         raise ValueError(
             f"Adaptador não encontrado para o domínio '{domain}'. "
             f"Domínios suportados: {', '.join(sorted(set(_ADAPTERS.keys())))}"
+        )
+    if adapter_cls.deprecated:
+        warnings.warn(
+            f"Adaptador '{clean_domain}' obsoleto: {adapter_cls.deprecated}",
+            FutureWarning,
+            stacklevel=2,
         )
     return adapter_cls()
 
