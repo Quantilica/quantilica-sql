@@ -11,6 +11,8 @@ from quantilica_sql.lake.convert import (
     convert_tree,
     file_key,
     lake_root,
+    origin_matches,
+    output_path,
     partition_of,
 )
 from quantilica_sql.lake.specs import DatasetSpec, get_spec, normalize_name, sources
@@ -26,6 +28,8 @@ __all__ = [
     "get_spec",
     "lake_root",
     "normalize_name",
+    "origin_matches",
+    "output_path",
     "partition_of",
     "sources",
 ]
