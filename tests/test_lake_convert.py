@@ -131,14 +131,31 @@ def test_alias_de_coluna_do_tesouro_direto(tmp_path):
     spec = get_spec("tesouro-direto", "investidores-do-tesouro-direto")
     src = tmp_path / "investidores-do-tesouro-direto-de-2019@20261007T000000.csv"
     src.write_text(
-        "Codigo do Investidor;Idade;UF do Investidor\n1;30;SP\n", encoding="utf-8"
+        "Codigo do Investidor;Data de Adesao;Idade;UF do Investidor\n"
+        "1;01/01/2019;30;SP\n",
+        encoding="utf-8",
     )
     res = convert_file(spec, src, lake=tmp_path / "lake")
     assert _cols(res.output) == [
         "codigo_do_investidor",
+        "data_de_adesao",
         "idade_do_investidor",
         "uf_do_investidor",
     ]
+
+
+def test_pagina_de_erro_no_lugar_do_csv_e_rejeitada(tmp_path):
+    from quantilica_sql.lake.convert import LakeError
+
+    spec = get_spec("tesouro-direto", "operacoes-do-tesouro-direto")
+    src = tmp_path / "operacoes-do-tesouro-direto-de-2018@20261006T131641.csv"
+    src.write_text(
+        "<html><head><title>Request Rejected</title></head><body>x</body></html>\n"
+    )
+    lake = tmp_path / "lake"
+    with pytest.raises(LakeError, match="cabeçalho inesperado"):
+        convert_file(spec, src, lake=lake)
+    assert not list(lake.rglob("*.parquet"))
 
 
 def test_convert_tree_isola_o_arquivo_ruim_e_ignora_sidecar(tmp_path):

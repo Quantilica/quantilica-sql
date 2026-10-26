@@ -27,6 +27,9 @@ class DatasetSpec:
     rename: dict[str, str] = field(default_factory=dict)
     # Nome curto da view no DuckDB (padrão: o dataset normalizado).
     alias: str | None = None
+    # Colunas (já normalizadas) que o cabeçalho precisa ter; protege contra a fonte
+    # devolver uma página de erro no lugar do CSV.
+    required: tuple[str, ...] = ()
 
     @property
     def view_name(self) -> str:
@@ -156,9 +159,13 @@ def _build() -> dict[tuple[str, str], DatasetSpec]:
         "investidores-do-tesouro-direto",
         rename=_TD_INVESTIDORES_RENAME,
         alias="investidores",
+        required=("codigo_do_investidor", "data_de_adesao", "idade_do_investidor"),
     )
     specs[("tesouro-direto", "operacoes-do-tesouro-direto")] = DatasetSpec(
-        "tesouro-direto", "operacoes-do-tesouro-direto", alias="operacoes"
+        "tesouro-direto",
+        "operacoes-do-tesouro-direto",
+        alias="operacoes",
+        required=("codigo_do_investidor", "data_da_operacao", "valor_da_operacao"),
     )
     return specs
 

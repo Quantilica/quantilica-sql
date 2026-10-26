@@ -182,6 +182,12 @@ def _select_list(conn, spec: DatasetSpec, read: str) -> str:
         ]
         names = unique_names(header)
         names = [spec.rename.get(n, n) for n in names]
+        missing = [c for c in spec.required if c not in names]
+        if missing:
+            raise LakeError(
+                f"cabeçalho inesperado em {spec.source}/{spec.dataset}: faltam "
+                f"{missing} (colunas: {names[:6]}…)"
+            )
     else:
         header = list(spec.names)
         names = list(spec.names)
