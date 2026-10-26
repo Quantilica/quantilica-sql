@@ -172,10 +172,16 @@ class FakeCursor:
         self.conn = conn
 
     def execute(self, query, params=None):
-        assert params is None
-        if self.conn.fail_on and self.conn.fail_on in query.as_string():
+        text = query if isinstance(query, str) else query.as_string()
+        if self.conn.fail_on and self.conn.fail_on in text:
             raise RuntimeError("boom")
-        self.conn.log.append(query.as_string())
+        self.conn.log.append(text)
+
+    def fetchone(self):
+        return (None,)  # to_regclass: o destino ainda não existe
+
+    def fetchall(self):
+        return []
 
     def __enter__(self):
         return self
@@ -230,11 +236,16 @@ def test_replace_sequence(tmp_path):
         "BEGIN",
         'CREATE SCHEMA IF NOT EXISTS "analytics"',
         'SET LOCAL search_path TO "ibge_sidra", public',
-        'DROP TABLE IF EXISTS "analytics"."t"',
-        'CREATE TABLE "analytics"."t" AS select 1 as a, \'100%\' as p',
-        'ALTER TABLE "analytics"."t" ADD PRIMARY KEY ("a", "b")',
-        'CREATE UNIQUE INDEX "ix_a" ON "analytics"."t" ("a")',
-        'CREATE INDEX "ix_b" ON "analytics"."t" ("b")',
+        'DROP TABLE IF EXISTS "analytics"."t__new"',
+        'CREATE TABLE "analytics"."t__new" AS select 1 as a, \'100%\' as p',
+        'ALTER TABLE "analytics"."t__new" ADD PRIMARY KEY ("a", "b")',
+        'CREATE UNIQUE INDEX "ix_a__new" ON "analytics"."t__new" ("a")',
+        'CREATE INDEX "ix_b__new" ON "analytics"."t__new" ("b")',
+        "SELECT to_regclass(%s)",
+        'ALTER TABLE "analytics"."t__new" RENAME TO "t"',
+        'ALTER INDEX "analytics"."t__new_pkey" RENAME TO "t_pkey"',
+        'ALTER INDEX "analytics"."ix_a__new" RENAME TO "ix_a"',
+        'ALTER INDEX "analytics"."ix_b__new" RENAME TO "ix_b"',
         "COMMIT",
     ]
 
@@ -251,7 +262,7 @@ def test_view_sequence_and_no_search_path_when_unset(tmp_path):
     assert conn.log == [
         "BEGIN",
         'CREATE SCHEMA IF NOT EXISTS "analytics"',
-        'DROP VIEW IF EXISTS "analytics"."v" CASCADE',
+        'DROP VIEW IF EXISTS "analytics"."v"',
         'CREATE VIEW "analytics"."v" AS select 1',
         "COMMIT",
     ]
@@ -264,7 +275,7 @@ def test_identifiers_are_escaped(tmp_path):
     )
     conn = FakeConn()
     TransformRunner().run_transform_toml(conn, toml)
-    assert 'DROP TABLE IF EXISTS "analytics"."a""b"' in conn.log
+    assert 'DROP TABLE IF EXISTS "analytics"."a""b__new"' in conn.log
 
 
 def test_each_table_has_own_transaction_and_failure_isolated(tmp_path):
@@ -274,7 +285,7 @@ def test_each_table_has_own_transaction_and_failure_isolated(tmp_path):
         '[[table]]\nname="three"\nschema="s"\nstrategy="replace"\nsql="q.sql"\n'
     )
     toml = make_pipeline(tmp_path, body)
-    conn = FakeConn(fail_on='CREATE TABLE "s"."two"')
+    conn = FakeConn(fail_on='CREATE TABLE "s"."two__new"')
     with pytest.raises(RuntimeError, match="boom"):
         TransformRunner().run_transform_toml(conn, toml)
     assert conn.log.count("BEGIN") == 2

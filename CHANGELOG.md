@@ -19,6 +19,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `quantilica sql validate [caminho] [--strict]`: valida manifest, `fetch.toml` e `transform.toml` sem banco. Erro quando um `transform.toml` não é coberto por nenhum `path` do manifest ou quando o `engine` de uma entrada não é `postgres` nem `duckdb`.
 
 ### Alterado
+- Estratégia `replace` do `transform.toml`: a tabela nova é construída (dados, PK e índices) sem lock no destino e trocada por `RENAME` numa janela curta; antes, `DROP TABLE` + `CREATE TABLE AS` seguravam `ACCESS EXCLUSIVE` durante todo o rebuild. Views dependentes (inclusive em cadeia) são recriadas na troca, o que antes quebrava com "other objects depend on it". Falha na reconstrução mantém a tabela anterior. Materialized view dependente falha com erro explícito.
+- Estratégia `view` não usa mais `DROP VIEW … CASCADE`: view com dependentes dá erro em vez de derrubá-los em silêncio.
 - `quantilica-core>=0.12.0` (leitura do sidecar de manifesto).
 - `copy_from_file/rows/stream` e o tracker não commitam mais dentro de `atomic_file_load`; fora dele o comportamento é o mesmo.
 - INMET: o skip passou a consultar o ledger com a mesma partição (ano) com que registra (antes nunca encontrava o arquivo e recarregava sempre), e `_arquivo` passa a ser o arquivo de origem (o ZIP), não o membro.

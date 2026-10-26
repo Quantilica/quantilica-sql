@@ -36,6 +36,97 @@ class TableSpec:
         return f"{self.schema}.{self.name}"
 
 
+_NEW = "__new"
+_OLD = "__old"
+
+
+def _quote(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+@dataclass(frozen=True)
+class _DependentView:
+    oid: int
+    schema: str
+    name: str
+    definition: str
+
+
+_DEPENDENTS_SQL = """
+SELECT DISTINCT c.oid, n.nspname, c.relname, c.relkind
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class c ON c.oid = r.ev_class
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE d.classid = 'pg_rewrite'::regclass
+  AND d.refobjid = ANY(%s)
+  AND c.oid <> d.refobjid
+  AND c.relkind IN ('v', 'm')
+"""
+
+_EDGES_SQL = """
+SELECT DISTINCT c.oid, d.refobjid
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class c ON c.oid = r.ev_class
+WHERE d.classid = 'pg_rewrite'::regclass
+  AND c.oid = ANY(%s)
+  AND d.refobjid = ANY(%s)
+  AND c.oid <> d.refobjid
+"""
+
+
+def _dependent_views(
+    cur: psycopg.Cursor, schema: str, name: str
+) -> list[_DependentView]:
+    """Views que dependem (direta ou indiretamente) da tabela, em ordem de criação.
+
+    A definição é lida com ``pg_get_viewdef``; permissões (GRANT) das views não são
+    preservadas. Materialized views dependentes não são recriadas: o erro é
+    explícito para o dado não sumir em silêncio.
+    """
+    cur.execute("SELECT to_regclass(%s)::oid", (f"{_quote(schema)}.{_quote(name)}",))
+    root = cur.fetchone()[0]
+    found: dict[int, tuple[str, str]] = {}
+    frontier = [root]
+    while frontier:
+        cur.execute(_DEPENDENTS_SQL, (frontier,))
+        frontier = []
+        for oid, nsp, rel, kind in cur.fetchall():
+            if oid in found:
+                continue
+            if kind == "m":
+                raise ValueError(
+                    f"{schema}.{name} tem a materialized view {nsp}.{rel} como "
+                    "dependente; remova-a antes de reconstruir a tabela."
+                )
+            found[oid] = (nsp, rel)
+            frontier.append(oid)
+    if not found:
+        return []
+
+    ids = list(found)
+    cur.execute(_EDGES_SQL, (ids, ids))
+    needs: dict[int, set[int]] = {oid: set() for oid in ids}
+    for view_oid, ref in cur.fetchall():
+        needs[view_oid].add(ref)
+    ordered: list[int] = []
+    pending = dict(needs)
+    while pending:
+        ready = sorted(oid for oid, deps in pending.items() if deps <= set(ordered))
+        if not ready:  # ciclo é impossível em views; evita laço infinito
+            raise ValueError(f"dependência circular entre views de {schema}.{name}")
+        for oid in ready:
+            ordered.append(oid)
+            del pending[oid]
+
+    views = []
+    for oid in ordered:
+        cur.execute("SELECT pg_get_viewdef(%s::oid, true)", (oid,))
+        views.append(_DependentView(oid, *found[oid], cur.fetchone()[0]))
+    return views
+
+
 def load_table_specs(
     transform_toml: Path, target_schema: str | None = None
 ) -> list[TableSpec]:
@@ -123,25 +214,76 @@ class TransformRunner:
     def _replace(
         cur: psycopg.Cursor, spec: TableSpec, target: sql.Identifier, query: sql.SQL
     ) -> None:
-        cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(target))
-        cur.execute(sql.SQL("CREATE TABLE {} AS ").format(target) + query)
+        """Reconstrói a tabela sem bloquear leituras durante a construção.
+
+        A tabela nova (``<nome>__new``) é montada com dados, PK e índices antes de
+        qualquer lock no destino; só então as views dependentes são removidas, os
+        nomes trocados e as views recriadas. O ``ACCESS EXCLUSIVE`` dura só a troca.
+        """
+        schema, name = spec.schema, spec.name
+        new = sql.Identifier(schema, f"{name}{_NEW}")
+        cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(new))
+        cur.execute(sql.SQL("CREATE TABLE {} AS ").format(new) + query)
         if spec.primary_key:
             cur.execute(
                 sql.SQL("ALTER TABLE {} ADD PRIMARY KEY ({})").format(
-                    target, sql.SQL(", ").join(map(sql.Identifier, spec.primary_key))
+                    new, sql.SQL(", ").join(map(sql.Identifier, spec.primary_key))
                 )
             )
         for ix in spec.indexes:
             cur.execute(
                 sql.SQL("CREATE {}INDEX {} ON {} ({})").format(
                     sql.SQL("UNIQUE " if ix.unique else ""),
-                    sql.Identifier(ix.name),
-                    target,
+                    sql.Identifier(f"{ix.name}{_NEW}"),
+                    new,
                     sql.SQL(", ").join(map(sql.Identifier, ix.columns)),
                 )
             )
 
+        cur.execute("SELECT to_regclass(%s)", (f"{_quote(schema)}.{_quote(name)}",))
+        row = cur.fetchone()
+        exists = row is not None and row[0] is not None
+        dependents = _dependent_views(cur, schema, name) if exists else []
+        for dep in reversed(dependents):
+            cur.execute(
+                sql.SQL("DROP VIEW {}").format(sql.Identifier(dep.schema, dep.name))
+            )
+        old = sql.Identifier(schema, f"{name}{_OLD}")
+        if exists:
+            cur.execute(
+                sql.SQL("ALTER TABLE {} RENAME TO {}").format(
+                    target, sql.Identifier(f"{name}{_OLD}")
+                )
+            )
+        cur.execute(
+            sql.SQL("ALTER TABLE {} RENAME TO {}").format(new, sql.Identifier(name))
+        )
+        if exists:
+            cur.execute(sql.SQL("DROP TABLE {}").format(old))
+        if spec.primary_key:
+            cur.execute(
+                sql.SQL("ALTER INDEX {} RENAME TO {}").format(
+                    sql.Identifier(schema, f"{name}{_NEW}_pkey"),
+                    sql.Identifier(f"{name}_pkey"),
+                )
+            )
+        for ix in spec.indexes:
+            cur.execute(
+                sql.SQL("ALTER INDEX {} RENAME TO {}").format(
+                    sql.Identifier(schema, f"{ix.name}{_NEW}"),
+                    sql.Identifier(ix.name),
+                )
+            )
+        for dep in dependents:
+            cur.execute(
+                sql.SQL("CREATE VIEW {} AS ").format(
+                    sql.Identifier(dep.schema, dep.name)
+                )
+                + sql.SQL(dep.definition.rstrip().rstrip(";"))  # type: ignore[arg-type]
+            )
+
     @staticmethod
     def _view(cur: psycopg.Cursor, target: sql.Identifier, query: sql.SQL) -> None:
-        cur.execute(sql.SQL("DROP VIEW IF EXISTS {} CASCADE").format(target))
+        # sem CASCADE: dependentes viram erro explícito, não somem em silêncio
+        cur.execute(sql.SQL("DROP VIEW IF EXISTS {}").format(target))
         cur.execute(sql.SQL("CREATE VIEW {} AS ").format(target) + query)
