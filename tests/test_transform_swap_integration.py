@@ -169,3 +169,50 @@ def test_view_com_dependente_falha_em_vez_de_derrubar_em_cascata(tmp_path, schem
     with pytest.raises(psycopg.errors.DependentObjectsStillExist):
         _run(schema, toml)
     assert _rows(schema, "filha") == [(1,)]
+
+
+def test_compare_schemas_aponta_diferencas(schema):
+    from quantilica_sql.core.compare import compare_schemas
+
+    outro = f"{schema}_b"
+    with psycopg.connect(URL, autocommit=True) as conn:
+        for s in (schema, outro):
+            conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(s)))
+            conn.execute(
+                sql.SQL("CREATE TABLE {} (a int, b text)").format(
+                    sql.Identifier(s, "igual")
+                )
+            )
+            conn.execute(
+                sql.SQL("INSERT INTO {} VALUES (1, 'x'), (1, 'x'), (2, NULL)").format(
+                    sql.Identifier(s, "igual")
+                )
+            )
+            conn.execute(
+                sql.SQL("CREATE TABLE {} (a int)").format(sql.Identifier(s, "difere"))
+            )
+        conn.execute(
+            sql.SQL("INSERT INTO {} VALUES (1), (2)").format(
+                sql.Identifier(schema, "difere")
+            )
+        )
+        conn.execute(
+            sql.SQL("INSERT INTO {} VALUES (1), (3)").format(
+                sql.Identifier(outro, "difere")
+            )
+        )
+        conn.execute(
+            sql.SQL("CREATE TABLE {} (a int)").format(sql.Identifier(schema, "so_a"))
+        )
+        try:
+            with psycopg.connect(URL) as c:
+                report = compare_schemas(c, schema, outro)
+        finally:
+            conn.execute(
+                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(outro))
+            )
+    por_tabela = {d.table: d for d in report.diffs}
+    assert por_tabela["igual"].ok and por_tabela["igual"].rows_a == 3
+    assert (por_tabela["difere"].only_a, por_tabela["difere"].only_b) == (1, 1)
+    assert "só existe em" in por_tabela["so_a"].note
+    assert not report.ok

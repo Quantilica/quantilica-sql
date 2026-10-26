@@ -11,6 +11,7 @@ from rich.table import Table
 
 from quantilica_sql import __version__
 from quantilica_sql.adapters import get_adapter, list_supported_domains
+from quantilica_sql.core.compare import compare_schemas
 from quantilica_sql.core.tablespaces import list_tablespaces
 from quantilica_sql.database import get_connection, inspect_schemas
 from quantilica_sql.plugin_manager import PluginManager
@@ -294,6 +295,35 @@ def cmd_lake_status(
                 source_dir.name, dataset_dir.name, str(len(files)), f"{size:,.1f}"
             )
     console.print(table)
+
+
+@app.command("compare")
+def cmd_compare(
+    schema_a: Annotated[str, typer.Argument(help="Schema de referência")],
+    schema_b: Annotated[str, typer.Argument(help="Schema a conferir")],
+    table: Annotated[
+        list[str] | None,
+        typer.Option("--table", "-t", help="Limita a estas tabelas (repetível)"),
+    ] = None,
+) -> None:
+    """Compara tabela a tabela dois schemas (paridade antes de uma troca)."""
+    with get_connection() as conn:
+        report = compare_schemas(conn, schema_a, schema_b, table)
+    out = Table(title=f"{schema_a} × {schema_b}")
+    for col in ("Tabela", "Linhas A", "Linhas B", "Só em A", "Só em B", "Situação"):
+        out.add_column(col)
+    for d in report.diffs:
+        out.add_row(
+            d.table,
+            "" if d.rows_a is None else f"{d.rows_a:,}",
+            "" if d.rows_b is None else f"{d.rows_b:,}",
+            str(d.only_a),
+            str(d.only_b),
+            "[green]igual[/green]" if d.ok else f"[red]{d.note or 'difere'}[/red]",
+        )
+    console.print(out)
+    if not report.ok:
+        raise typer.Exit(code=1)
 
 
 @app.command("tablespaces")
