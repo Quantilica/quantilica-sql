@@ -227,6 +227,15 @@ indexes=[{name="ix_a", columns=["a"], unique=true}, {name="ix_b", columns=["b"]}
 """
 
 
+def test_ensaio_lateral_resolve_o_target_antes_do_raw(tmp_path):
+    toml = make_pipeline(tmp_path, REPLACE)
+    conn = FakeConn()
+    TransformRunner("ibge_sidra", target_schema="lateral").run_transform_toml(
+        conn, toml
+    )
+    assert 'SET LOCAL search_path TO "lateral", "ibge_sidra", public' in conn.log
+
+
 def test_replace_sequence(tmp_path):
     toml = make_pipeline(tmp_path, REPLACE)
     conn = FakeConn()

@@ -241,9 +241,15 @@ class TransformRunner:
                 )
             )
             if self.raw_schema:
+                # Num ensaio lateral (target_schema) as tabelas já geradas pelo próprio
+                # pipeline precisam resolver antes das do schema de origem.
+                path = [self.target_schema, self.raw_schema]
                 cur.execute(
                     sql.SQL("SET LOCAL search_path TO {}, public").format(
-                        sql.Identifier(self.raw_schema)
+                        sql.SQL(", ").join(
+                            sql.Identifier(n)
+                            for n in dict.fromkeys(p for p in path if p)
+                        )
                     )
                 )
             target = sql.Identifier(spec.schema, spec.name)
