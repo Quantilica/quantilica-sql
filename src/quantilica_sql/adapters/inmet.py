@@ -14,6 +14,7 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.inmet")
@@ -89,8 +90,7 @@ class InmetAdapter(BaseSourceAdapter):
         ).format(sql.Identifier(self.schema))
         with conn.cursor() as cur:
             cur.execute(ddl)
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
 
     def _parse_station_header(
         self, stream: io.TextIOBase
@@ -135,7 +135,10 @@ class InmetAdapter(BaseSourceAdapter):
         filename: str,
         year: str = "",
         tablespace: str | None = None,
+        source_tag: str | None = None,
+        record: bool = True,
     ) -> int:
+        tag = source_tag or filename
         text_stream = io.StringIO(
             stream_bytes.read().decode("latin-1", errors="replace")
         )
@@ -181,8 +184,8 @@ class InmetAdapter(BaseSourceAdapter):
             if not r or len(r) < 2:
                 continue
             row_data = [wmo] + [val.strip().replace(",", ".") for val in r[: len(cols)]]
-            # Adiciona placeholder de _arquivo
-            row_data.append(filename)
+            # _arquivo = arquivo de origem (o ZIP, quando o CSV vem de um)
+            row_data.append(tag)
             writer.writerow(row_data)
             count += 1
 
@@ -204,14 +207,15 @@ class InmetAdapter(BaseSourceAdapter):
                 with cur.copy(copy_sql) as copy:
                     copy.write(copy_buf.getvalue())
 
-        self.record_and_commit(
-            conn,
-            filename=filename,
-            dataset="inmet",
-            rows_loaded=count,
-            particao=year,
-            metadata={"estacao": wmo, "tabela": table_name},
-        )
+        if record:
+            self.record_and_commit(
+                conn,
+                filename=tag,
+                dataset="inmet",
+                rows_loaded=count,
+                particao=year,
+                metadata={"estacao": wmo, "tabela": table_name},
+            )
         return count
 
     def load(
@@ -255,9 +259,14 @@ class InmetAdapter(BaseSourceAdapter):
         )
 
         for fpath in all_files:
-            if not force and self.is_file_already_loaded(
-                conn, fpath.name, dataset="inmet"
-            ):
+            year_match = [
+                part for part in fpath.parts if part.isdigit() and len(part) == 4
+            ]
+            year = year_match[-1] if year_match else ""
+            do_load, digest = self.should_load_file(
+                conn, fpath, dataset="inmet", particao=year, force=force
+            )
+            if not do_load:
                 logger.info("  PULANDO %s (já carregado)", fpath.name)
                 continue
 
@@ -269,40 +278,52 @@ class InmetAdapter(BaseSourceAdapter):
                     local_file = self.stage_file_locally(fpath, staging_dir)
                     is_staged = True
 
-                year_match = [
-                    part for part in fpath.parts if part.isdigit() and len(part) == 4
-                ]
-                year = year_match[-1] if year_match else ""
-
-                if local_file.suffix.lower() == ".zip":
-                    with zipfile.ZipFile(local_file) as z:
-                        csv_members = [
-                            m for m in z.namelist() if m.lower().endswith(".csv")
-                        ]
-                        zip_rows = 0
-                        for member in csv_members:
-                            with z.open(member) as f:
-                                rows = self._load_station_csv_stream(
-                                    conn, f, member, year=year, tablespace=tablespace
-                                )
-                                zip_rows += rows
-                        self.record_and_commit(
-                            conn,
-                            filename=fpath.name,
-                            dataset="inmet",
-                            rows_loaded=zip_rows,
-                            particao=year,
-                            metadata={"membros": len(csv_members)},
-                        )
-                        total_rows += zip_rows
+                with self.atomic_file(
+                    conn,
+                    filename=fpath.name,
+                    dataset="inmet",
+                    particao=year,
+                    sha256=digest,
+                ):
+                    if local_file.suffix.lower() == ".zip":
+                        with zipfile.ZipFile(local_file) as z:
+                            csv_members = [
+                                m for m in z.namelist() if m.lower().endswith(".csv")
+                            ]
+                            zip_rows = 0
+                            for member in csv_members:
+                                with z.open(member) as f:
+                                    zip_rows += self._load_station_csv_stream(
+                                        conn,
+                                        f,
+                                        member,
+                                        year=year,
+                                        tablespace=tablespace,
+                                        source_tag=fpath.name,
+                                        record=False,
+                                    )
+                            self.record_and_commit(
+                                conn,
+                                filename=fpath.name,
+                                dataset="inmet",
+                                rows_loaded=zip_rows,
+                                particao=year,
+                                metadata={"membros": len(csv_members)},
+                            )
+                            total_rows += zip_rows
+                            total_loaded += 1
+                    else:
+                        with open(local_file, "rb") as f:
+                            rows = self._load_station_csv_stream(
+                                conn,
+                                f,
+                                fpath.name,
+                                year=year,
+                                tablespace=tablespace,
+                                source_tag=fpath.name,
+                            )
+                        total_rows += rows
                         total_loaded += 1
-                else:
-                    with open(local_file, "rb") as f:
-                        rows = self._load_station_csv_stream(
-                            conn, f, fpath.name, year=year, tablespace=tablespace
-                        )
-                    total_rows += rows
-                    total_loaded += 1
 
                 logger.info(
                     "  [inmet] %s carregado em %.2fs",

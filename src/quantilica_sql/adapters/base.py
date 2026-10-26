@@ -14,11 +14,15 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.config import get_settings
+from quantilica_sql.core.atomic import atomic_file_load, file_sha256
 from quantilica_sql.core.tracker import (
+    backfill_sha256,
     ensure_tracker_table,
+    file_status,
     is_file_loaded,
     record_loaded_file,
 )
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.base")
@@ -182,8 +186,7 @@ class BaseSourceAdapter(ABC):
                         )
                     )
 
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
         return norm_cols
 
     def is_file_already_loaded(
@@ -202,6 +205,62 @@ class BaseSourceAdapter(ABC):
             filename=filename,
             dataset=ds,
             particao=particao,
+        )
+
+    def should_load_file(
+        self,
+        conn: psycopg.Connection,
+        path: Path,
+        *,
+        dataset: str | None = None,
+        particao: str = "",
+        force: bool = False,
+        filename: str | None = None,
+    ) -> tuple[bool, str]:
+        """Decide se o arquivo deve ser carregado, comparando o ``sha256`` ao ledger.
+
+        Carrega quando é novo, foi republicado com outro hash ou ``force``. Registro
+        legado (sem hash) é preservado: só ganha o hash, sem recarga.
+
+        Returns:
+            ``(carregar, sha256)``; passe o hash a ``atomic_file``.
+        """
+        digest = file_sha256(path)
+        if force:
+            return True, digest
+        name = filename or path.name
+        ds = dataset or self.domain
+        status = file_status(conn, self.schema, name, ds, particao, digest)
+        if status == "legacy":
+            backfill_sha256(conn, self.schema, name, ds, particao, digest)
+            return False, digest
+        if status == "changed":
+            logger.info("%s/%s (%s) mudou na origem; recarregando.", ds, particao, name)
+        return status in ("new", "changed"), digest
+
+    def atomic_file(
+        self,
+        conn: psycopg.Connection,
+        *,
+        filename: str,
+        dataset: str | None = None,
+        particao: str = "",
+        sha256: str | None = None,
+        table: str | None = None,
+    ):
+        """Escopo transacional da carga de um arquivo (dados + ledger juntos).
+
+        Use ao redor do COPY e do ``record_and_commit``; substitui a carga anterior
+        do mesmo arquivo. Ver ``quantilica_sql.core.atomic``.
+        """
+        return atomic_file_load(
+            conn,
+            schema=self.schema,
+            table=table,
+            filename=filename,
+            dataset=dataset or self.domain,
+            particao=particao,
+            sha256=sha256,
         )
 
     def record_and_commit(
@@ -225,8 +284,7 @@ class BaseSourceAdapter(ABC):
             particao=particao,
             metadata=metadata or {},
         )
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
 
     @abstractmethod
     def load(

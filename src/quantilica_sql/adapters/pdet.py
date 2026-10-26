@@ -19,6 +19,7 @@ from quantilica_sql.core.tracker import (
     is_file_loaded,
     record_loaded_file,
 )
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.pdet")
@@ -58,8 +59,7 @@ def _ensure_table(
             cur.execute(
                 f'CREATE TABLE IF NOT EXISTS "{schema}"."{table}" ({cols_sql});'
             )
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
 
 
 class PdetAdapter(BaseSourceAdapter):
@@ -219,8 +219,7 @@ class PdetAdapter(BaseSourceAdapter):
             particao=particao,
             metadata={"tabela": f"{self.schema}.{table}"},
         )
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
         return rows_loaded
 
     def _load_directory(

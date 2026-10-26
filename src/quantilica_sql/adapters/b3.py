@@ -12,6 +12,7 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.b3")
@@ -112,8 +113,7 @@ class B3Adapter(BaseSourceAdapter):
         ).format(sql.Identifier(self.schema), tb_clause)
         with conn.cursor() as cur:
             cur.execute(ddl)
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
 
     def parse_cotahist_line(self, line: str, filename: str) -> list[str] | None:
         """Faz o parsing dos campos posicionais de uma linha do COTAHIST (tipo 01)."""
@@ -194,39 +194,50 @@ class B3Adapter(BaseSourceAdapter):
         conn: psycopg.Connection,
         file_path: Path,
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
+        filename = source_name or file_path.name
         self._ensure_cotacoes_table(conn, tablespace=tablespace)
         copy_buf = io.StringIO()
         count = 0
 
         with open(file_path, encoding="latin-1", errors="replace") as f:
             for line in f:
-                parsed = self.parse_cotahist_line(line, file_path.name)
+                parsed = self.parse_cotahist_line(line, filename)
                 if parsed:
                     copy_buf.write(";".join(parsed) + "\n")
                     count += 1
 
-        if count > 0:
-            copy_buf.seek(0)
-            copy_sql = sql.SQL(
-                """
-                COPY {}.cotacoes_historicas
-                FROM STDIN WITH (FORMAT csv, DELIMITER ';', NULL '')
-                """
-            ).format(sql.Identifier(self.schema))
-            with conn.cursor() as cur:
-                with cur.copy(copy_sql) as copy:
-                    while chunk := copy_buf.read(1024 * 1024):
-                        copy.write(chunk)
-
-        self.record_and_commit(
+        with self.atomic_file(
             conn,
-            filename=file_path.name,
+            filename=filename,
             dataset="b3",
-            rows_loaded=count,
-            particao=file_path.stem,
-            metadata={"tabela": "cotacoes_historicas"},
-        )
+            particao=Path(filename).stem,
+            sha256=sha256,
+            table="cotacoes_historicas",
+        ):
+            if count > 0:
+                copy_buf.seek(0)
+                copy_sql = sql.SQL(
+                    """
+                    COPY {}.cotacoes_historicas
+                    FROM STDIN WITH (FORMAT csv, DELIMITER ';', NULL '')
+                    """
+                ).format(sql.Identifier(self.schema))
+                with conn.cursor() as cur:
+                    with cur.copy(copy_sql) as copy:
+                        while chunk := copy_buf.read(1024 * 1024):
+                            copy.write(chunk)
+
+            self.record_and_commit(
+                conn,
+                filename=filename,
+                dataset="b3",
+                rows_loaded=count,
+                particao=Path(filename).stem,
+                metadata={"tabela": "cotacoes_historicas"},
+            )
         return count
 
     def load(
@@ -267,9 +278,10 @@ class B3Adapter(BaseSourceAdapter):
         )
 
         for fpath in all_files:
-            if not force and self.is_file_already_loaded(
-                conn, fpath.name, dataset="b3", particao=fpath.stem
-            ):
+            do_load, digest = self.should_load_file(
+                conn, fpath, dataset="b3", particao=fpath.stem, force=force
+            )
+            if not do_load:
                 logger.info("  PULANDO %s (já carregado)", fpath.name)
                 continue
 
@@ -281,7 +293,13 @@ class B3Adapter(BaseSourceAdapter):
                     local_file = self.stage_file_locally(fpath, staging_dir)
                     is_staged = True
 
-                rows = self.load_cotahist_file(conn, local_file, tablespace=tablespace)
+                rows = self.load_cotahist_file(
+                    conn,
+                    local_file,
+                    tablespace=tablespace,
+                    sha256=digest,
+                    source_name=fpath.name,
+                )
                 total_rows += rows
                 total_loaded += 1
                 logger.info(

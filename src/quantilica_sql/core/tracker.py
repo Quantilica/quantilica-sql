@@ -9,6 +9,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
+from quantilica_sql.core.txscope import ACTIVE, commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.tracker")
@@ -45,8 +46,7 @@ def ensure_tracker_table(conn: psycopg.Connection, schema: str) -> None:
     with conn.cursor() as cur:
         cur.execute(create_table_sql)
         cur.execute(create_index_sql)
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
 
 
 def is_file_loaded(
@@ -95,6 +95,12 @@ def record_loaded_file(
     metadata: dict[str, Any] | None = None,
 ) -> None:
     """Registra a conclusão de uma carga com sucesso."""
+    scope = ACTIVE.get()
+    if scope is not None:
+        if sha256 is None:
+            sha256 = scope.sha256
+        if scope.touched:
+            metadata = {**(metadata or {}), "_tabelas": sorted(scope.touched)}
     ensure_tracker_table(conn, schema)
     insert_sql = sql.SQL(
         """
@@ -118,5 +124,52 @@ def record_loaded_file(
             insert_sql,
             (filename, dataset, particao, sha256, rows_loaded, meta_json),
         )
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
+
+
+def file_status(
+    conn: psycopg.Connection,
+    schema: str,
+    filename: str,
+    dataset: str,
+    particao: str,
+    sha256: str,
+) -> str:
+    """Situação do arquivo no ledger frente ao hash atual.
+
+    Returns:
+        ``"new"`` (sem registro), ``"loaded"`` (mesmo hash), ``"changed"``
+        (republicado com outro hash) ou ``"legacy"`` (registro sem hash, de antes
+        do ledger por ``sha256``; não dá para saber se mudou).
+    """
+    ensure_tracker_table(conn, schema)
+    query = sql.SQL(
+        "SELECT sha256 FROM {} WHERE nome_arquivo = %s AND dataset = %s "
+        "AND particao = %s"
+    ).format(sql.Identifier(schema, "arquivo_carregado"))
+    with conn.cursor() as cur:
+        cur.execute(query, (filename, dataset, particao))
+        row = cur.fetchone()
+    if row is None:
+        return "new"
+    if row[0] is None:
+        return "legacy"
+    return "loaded" if row[0] == sha256 else "changed"
+
+
+def backfill_sha256(
+    conn: psycopg.Connection,
+    schema: str,
+    filename: str,
+    dataset: str,
+    particao: str,
+    sha256: str,
+) -> None:
+    """Preenche o hash de um registro legado, sem recarregar nada."""
+    query = sql.SQL(
+        "UPDATE {} SET sha256 = %s WHERE nome_arquivo = %s AND dataset = %s "
+        "AND particao = %s AND sha256 IS NULL"
+    ).format(sql.Identifier(schema, "arquivo_carregado"))
+    with conn.cursor() as cur:
+        cur.execute(query, (sha256, filename, dataset, particao))
+    commit_if_standalone(conn)

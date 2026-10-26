@@ -21,6 +21,7 @@ from quantilica_sql.core.tracker import (
     is_file_loaded,
     record_loaded_file,
 )
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.rfb")
@@ -250,8 +251,7 @@ class RfbAdapter(BaseSourceAdapter):
                     ) PARTITION BY LIST (competencia){tb_clause};
                 """
                 cur.execute(ddl)
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
 
     def ensure_partition(
         self,
@@ -276,8 +276,7 @@ class RfbAdapter(BaseSourceAdapter):
                 f"ALTER TABLE {self.schema}.{part_name} "
                 f"ALTER COLUMN competencia SET DEFAULT '{competencia}';"
             )
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
         return part_name
 
     def load(
@@ -492,8 +491,7 @@ class RfbAdapter(BaseSourceAdapter):
             particao=competencia,
             metadata={"tabela": table_name},
         )
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
         return rows_loaded
 
     def _load_directory(

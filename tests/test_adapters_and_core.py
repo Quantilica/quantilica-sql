@@ -22,6 +22,7 @@ class MockDbState:
     def __init__(self) -> None:
         self.loaded_files: set[tuple[str, str, str]] = set()
         self.recorded: list[tuple] = []
+        self.shas: dict[tuple[str, str, str], str | None] = {}
         self.sqls: list[tuple[str, tuple | None]] = []
 
     def make_conn(self, rowcount: int = 10) -> MagicMock:
@@ -46,13 +47,21 @@ class MockDbState:
                     "",
                     "",
                 ) in self.loaded_files:
-                    mock_cur.fetchone.return_value = ("mock_sha",)
+                    sha = self.shas.get((fn, ds, part), "mock_sha")
+                    mock_cur.fetchone.return_value = (sha,)
+                else:
+                    mock_cur.fetchone.return_value = None
+            elif "SELECT linhas, metadados FROM" in q_str:
+                fn, ds, part = params
+                if (fn, ds, part) in self.loaded_files:
+                    mock_cur.fetchone.return_value = (1, {})
                 else:
                     mock_cur.fetchone.return_value = None
             elif "INSERT INTO" in q_str and "arquivo_carregado" in q_str:
                 if params:
                     fn, ds, part = params[0], params[1], params[2]
                     self.loaded_files.add((fn, ds, part))
+                    self.shas[(fn, ds, part)] = params[3]
                     self.recorded.append(params)
             elif "SELECT EXISTS" in q_str or "SELECT 1 FROM pg_class" in q_str:
                 mock_cur.fetchone.return_value = (True,)

@@ -20,6 +20,7 @@ from quantilica_sql.core.tracker import (
     is_file_loaded,
     record_loaded_file,
 )
+from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.bcb")
@@ -134,8 +135,7 @@ class BcbAdapter(BaseSourceAdapter):
         ).format(schema=sql.Identifier(self.schema))
         with conn.cursor() as cur:
             cur.execute(create_sql)
-        if not conn.autocommit:
-            conn.commit()
+        commit_if_standalone(conn)
 
     def load(
         self,
@@ -219,24 +219,30 @@ class BcbAdapter(BaseSourceAdapter):
                 formatted_rows.append((s_id, dt_val, dt_end, val, ativo))
 
         cols = ["series_id", "date", "date_end", "value", "ativo"]
-        if formatted_rows:
-            rows_loaded = copy_from_rows(
-                conn,
-                schema=self.schema,
-                table="series_data",
-                columns=cols,
-                rows=formatted_rows,
-            )
-        else:
-            rows_loaded = 0
-
-        record_loaded_file(
+        with self.atomic_file(
             conn,
-            schema=self.schema,
             filename=filename,
             dataset=self.domain,
-            rows_loaded=rows_loaded,
             particao=series_id_str,
-            metadata={"series_id": int(series_id)},
-        )
+        ):
+            if formatted_rows:
+                rows_loaded = copy_from_rows(
+                    conn,
+                    schema=self.schema,
+                    table="series_data",
+                    columns=cols,
+                    rows=formatted_rows,
+                )
+            else:
+                rows_loaded = 0
+
+            record_loaded_file(
+                conn,
+                schema=self.schema,
+                filename=filename,
+                dataset=self.domain,
+                rows_loaded=rows_loaded,
+                particao=series_id_str,
+                metadata={"series_id": int(series_id)},
+            )
         return rows_loaded

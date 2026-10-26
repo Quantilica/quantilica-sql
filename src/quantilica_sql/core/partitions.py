@@ -8,6 +8,8 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
+from quantilica_sql.core.txscope import commit_if_standalone
+
 logger = logging.getLogger("quantilica_sql.partitions")
 
 
@@ -60,8 +62,7 @@ def ensure_yearly_partition(
         cur.execute(create_sql)
         logger.info("Partição anual criada: %s.%s (%s)", schema, part_name, tablespace)
 
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
     return f'"{schema}"."{part_name}"'
 
 
@@ -120,8 +121,7 @@ def ensure_monthly_partition(
         cur.execute(create_sql)
         logger.info("Partição mensal criada: %s.%s (%s)", schema, part_name, tablespace)
 
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
     return f'"{schema}"."{part_name}"'
 
 

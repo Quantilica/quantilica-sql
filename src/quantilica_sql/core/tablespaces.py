@@ -8,6 +8,8 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
+from quantilica_sql.core.txscope import commit_if_standalone
+
 logger = logging.getLogger("quantilica_sql.tablespaces")
 
 
@@ -71,6 +73,5 @@ def move_table_to_tablespace(
                 )
             )
 
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
     return True

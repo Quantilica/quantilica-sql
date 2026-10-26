@@ -13,7 +13,8 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
-from quantilica_sql.core.copy_stream import copy_from_file
+from quantilica_sql.core.atomic import file_sha256
+from quantilica_sql.core.copy_stream import copy_from_file, copy_from_stream
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.inep")
@@ -85,6 +86,8 @@ class InepAdapter(BaseSourceAdapter):
         file_path: Path,
         group_name: str = "",
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
         table_name = self._derive_table_name(file_path.name, group_name)
 
@@ -119,25 +122,35 @@ class InepAdapter(BaseSourceAdapter):
             conn, table_name, col_names, tablespace=tablespace, add_source_col=True
         )
 
-        rows = copy_from_file(
+        filename = source_name or file_path.name
+        with self.atomic_file(
             conn,
-            schema=self.schema,
-            table=table_name,
-            file_path=file_path,
-            columns=norm_cols,
-            delimiter=delimiter,
-            null_value="",
-            encoding="UTF8" if "utf" in encoding.lower() else "LATIN1",
-        )
-
-        self.record_and_commit(
-            conn,
-            filename=file_path.name,
+            filename=filename,
             dataset="inep",
-            rows_loaded=rows,
             particao=group_name,
-            metadata={"tabela": table_name},
-        )
+            sha256=sha256,
+            table=table_name,
+        ):
+            rows = copy_from_file(
+                conn,
+                schema=self.schema,
+                table=table_name,
+                file_path=file_path,
+                columns=norm_cols,
+                delimiter=delimiter,
+                null_value="",
+                encoding="UTF8" if "utf" in encoding.lower() else "LATIN1",
+                header=True,
+            )
+
+            self.record_and_commit(
+                conn,
+                filename=filename,
+                dataset="inep",
+                rows_loaded=rows,
+                particao=group_name,
+                metadata={"tabela": table_name},
+            )
         return rows
 
     def load_single_zip(
@@ -146,9 +159,21 @@ class InepAdapter(BaseSourceAdapter):
         file_path: Path,
         group_name: str = "",
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
         total_rows = 0
-        with zipfile.ZipFile(file_path) as z:
+        filename = source_name or file_path.name
+        with (
+            zipfile.ZipFile(file_path) as z,
+            self.atomic_file(
+                conn,
+                filename=filename,
+                dataset="inep",
+                particao=group_name,
+                sha256=sha256,
+            ),
+        ):
             csv_members = [
                 m
                 for m in z.namelist()
@@ -175,41 +200,25 @@ class InepAdapter(BaseSourceAdapter):
                     )
 
                 with z.open(member) as f:
-                    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in norm_cols)
-                    copy_sql = sql.SQL(
-                        """
-                        COPY {}.{} ({})
-                        FROM STDIN WITH (
-                            FORMAT csv,
-                            DELIMITER {},
-                            HEADER true,
-                            ENCODING 'LATIN1',
-                            NULL ''
-                        )
-                        """
-                    ).format(
-                        sql.Identifier(self.schema),
-                        sql.Identifier(table_name),
-                        cols_sql,
-                        sql.Literal(delim),
+                    total_rows += copy_from_stream(
+                        conn,
+                        self.schema,
+                        table_name,
+                        f,
+                        columns=norm_cols,
+                        delimiter=delim,
+                        encoding="LATIN1",
+                        header=True,
                     )
-                    with conn.cursor() as cur:
-                        with cur.copy(copy_sql) as copy:
-                            while chunk := f.read(131072):
-                                copy.write(chunk)
-                        m_rows = (
-                            cur.rowcount if cur.rowcount and cur.rowcount >= 0 else 0
-                        )
-                        total_rows += m_rows
 
-        self.record_and_commit(
-            conn,
-            filename=file_path.name,
-            dataset="inep",
-            rows_loaded=total_rows,
-            particao=group_name,
-            metadata={"membros": len(csv_members)},
-        )
+            self.record_and_commit(
+                conn,
+                filename=filename,
+                dataset="inep",
+                rows_loaded=total_rows,
+                particao=group_name,
+                metadata={"membros": len(csv_members)},
+            )
         return total_rows
 
     def load(
@@ -235,8 +244,20 @@ class InepAdapter(BaseSourceAdapter):
                     local_file = self.stage_file_locally(source_dir, staging_dir)
                     is_staged = True
                 if local_file.suffix.lower() == ".zip":
-                    return self.load_single_zip(conn, local_file, tablespace=tablespace)
-                return self.load_single_csv(conn, local_file, tablespace=tablespace)
+                    return self.load_single_zip(
+                        conn,
+                        local_file,
+                        tablespace=tablespace,
+                        sha256=file_sha256(source_dir),
+                        source_name=source_dir.name,
+                    )
+                return self.load_single_csv(
+                    conn,
+                    local_file,
+                    tablespace=tablespace,
+                    sha256=file_sha256(source_dir),
+                    source_name=source_dir.name,
+                )
             finally:
                 if is_staged and local_file.exists():
                     local_file.unlink(missing_ok=True)
@@ -267,9 +288,10 @@ class InepAdapter(BaseSourceAdapter):
         )
 
         for group_name, fpath in all_files:
-            if not force and self.is_file_already_loaded(
-                conn, fpath.name, dataset="inep", particao=group_name
-            ):
+            do_load, digest = self.should_load_file(
+                conn, fpath, dataset="inep", particao=group_name, force=force
+            )
+            if not do_load:
                 logger.info("  PULANDO %s (já carregado)", fpath.name)
                 continue
 
@@ -283,11 +305,21 @@ class InepAdapter(BaseSourceAdapter):
 
                 if local_file.suffix.lower() == ".zip":
                     rows = self.load_single_zip(
-                        conn, local_file, group_name=group_name, tablespace=tablespace
+                        conn,
+                        local_file,
+                        group_name=group_name,
+                        tablespace=tablespace,
+                        sha256=digest,
+                        source_name=fpath.name,
                     )
                 else:
                     rows = self.load_single_csv(
-                        conn, local_file, group_name=group_name, tablespace=tablespace
+                        conn,
+                        local_file,
+                        group_name=group_name,
+                        tablespace=tablespace,
+                        sha256=digest,
+                        source_name=fpath.name,
                     )
 
                 total_rows += rows

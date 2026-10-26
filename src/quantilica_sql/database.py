@@ -13,6 +13,7 @@ from psycopg import sql
 from sqlalchemy import Engine, create_engine
 
 from quantilica_sql.config import get_settings
+from quantilica_sql.core.txscope import commit_if_standalone
 
 logger = logging.getLogger("quantilica_sql.database")
 
@@ -51,8 +52,7 @@ def ensure_schema(conn: psycopg.Connection, schema_name: str) -> None:
     )
     with conn.cursor() as cur:
         cur.execute(query)
-    if not conn.autocommit:
-        conn.commit()
+    commit_if_standalone(conn)
 
 
 @contextlib.contextmanager

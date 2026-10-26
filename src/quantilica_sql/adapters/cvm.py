@@ -14,6 +14,8 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.core.atomic import file_sha256
+from quantilica_sql.core.copy_stream import copy_from_stream
 from quantilica_sql.database import ensure_schema
 
 logger = logging.getLogger("quantilica_sql.adapters.cvm")
@@ -99,30 +101,17 @@ class CvmAdapter(BaseSourceAdapter):
         col_names: list[str],
         stream: io.BufferedIOBase | Any,
     ) -> int:
-        quoted_cols = sql.SQL(", ").join(sql.Identifier(c) for c in col_names)
-        copy_sql = sql.SQL(
-            """
-            COPY {}.{} ({})
-            FROM STDIN WITH (
-                FORMAT csv,
-                DELIMITER ';',
-                HEADER true,
-                ENCODING 'LATIN1',
-                QUOTE E'\b',
-                NULL ''
-            )
-            """
-        ).format(
-            sql.Identifier(self.schema),
-            sql.Identifier(table_name),
-            quoted_cols,
+        return copy_from_stream(
+            conn,
+            self.schema,
+            table_name,
+            stream,
+            columns=col_names,
+            delimiter=";",
+            quote="\b",
+            encoding="LATIN1",
+            header=True,
         )
-        with conn.cursor() as cur:
-            with cur.copy(copy_sql) as copy:
-                while chunk := stream.read(131072):  # buffer 128KB
-                    copy.write(chunk)
-            rows_copied = cur.rowcount if cur.rowcount and cur.rowcount >= 0 else 0
-        return rows_copied
 
     def load_single_csv(
         self,
@@ -130,28 +119,42 @@ class CvmAdapter(BaseSourceAdapter):
         file_path: Path,
         group_name: str = "",
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
         table_name = derive_table_name(file_path.name)
+        filename = source_name or file_path.name
         with open(file_path, "rb") as f:
             header_line = f.readline().decode("latin-1", errors="replace").strip()
             col_names = [c.strip() for c in header_line.split(";") if c.strip()]
             if not col_names:
                 logger.warning("Arquivo vazio ou sem cabeçalho: %s", file_path.name)
                 return 0
-            norm_cols = self.ensure_table_with_schema_evolution(
-                conn, table_name, col_names, tablespace=tablespace, add_source_col=True
-            )
-            f.seek(0)
-            rows = self._copy_stream_to_table(conn, table_name, norm_cols, f)
-
-        self.record_and_commit(
-            conn,
-            filename=file_path.name,
-            dataset="cvm",
-            rows_loaded=rows,
-            particao=group_name,
-            metadata={"tabela": table_name},
-        )
+            with self.atomic_file(
+                conn,
+                filename=filename,
+                dataset="cvm",
+                particao=group_name,
+                sha256=sha256,
+                table=table_name,
+            ):
+                norm_cols = self.ensure_table_with_schema_evolution(
+                    conn,
+                    table_name,
+                    col_names,
+                    tablespace=tablespace,
+                    add_source_col=True,
+                )
+                f.seek(0)
+                rows = self._copy_stream_to_table(conn, table_name, norm_cols, f)
+                self.record_and_commit(
+                    conn,
+                    filename=filename,
+                    dataset="cvm",
+                    rows_loaded=rows,
+                    particao=group_name,
+                    metadata={"tabela": table_name},
+                )
         return rows
 
     def load_single_zip(
@@ -160,9 +163,21 @@ class CvmAdapter(BaseSourceAdapter):
         file_path: Path,
         group_name: str = "",
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
         total_rows = 0
-        with zipfile.ZipFile(file_path) as z:
+        filename = source_name or file_path.name
+        with (
+            zipfile.ZipFile(file_path) as z,
+            self.atomic_file(
+                conn,
+                filename=filename,
+                dataset="cvm",
+                particao=group_name,
+                sha256=sha256,
+            ),
+        ):
             csv_members = [m for m in z.namelist() if m.lower().endswith(".csv")]
             for member in csv_members:
                 table_name = derive_table_name(member)
@@ -186,14 +201,14 @@ class CvmAdapter(BaseSourceAdapter):
                     )
                     total_rows += member_rows
 
-        self.record_and_commit(
-            conn,
-            filename=file_path.name,
-            dataset="cvm",
-            rows_loaded=total_rows,
-            particao=group_name,
-            metadata={"membros": len(csv_members)},
-        )
+            self.record_and_commit(
+                conn,
+                filename=filename,
+                dataset="cvm",
+                rows_loaded=total_rows,
+                particao=group_name,
+                metadata={"membros": len(csv_members)},
+            )
         return total_rows
 
     def load(
@@ -220,9 +235,21 @@ class CvmAdapter(BaseSourceAdapter):
                     is_staged = True
                 ext = local_file.suffix.lower()
                 if ext == ".zip":
-                    return self.load_single_zip(conn, local_file, tablespace=tablespace)
+                    return self.load_single_zip(
+                        conn,
+                        local_file,
+                        tablespace=tablespace,
+                        sha256=file_sha256(source_dir),
+                        source_name=source_dir.name,
+                    )
                 elif ext == ".csv":
-                    return self.load_single_csv(conn, local_file, tablespace=tablespace)
+                    return self.load_single_csv(
+                        conn,
+                        local_file,
+                        tablespace=tablespace,
+                        sha256=file_sha256(source_dir),
+                        source_name=source_dir.name,
+                    )
                 else:
                     logger.warning("Formato não suportado: %s", local_file.name)
                     return 0
@@ -256,9 +283,10 @@ class CvmAdapter(BaseSourceAdapter):
         )
 
         for group_name, fpath in all_files:
-            if not force and self.is_file_already_loaded(
-                conn, fpath.name, dataset="cvm", particao=group_name
-            ):
+            do_load, digest = self.should_load_file(
+                conn, fpath, dataset="cvm", particao=group_name, force=force
+            )
+            if not do_load:
                 logger.info("  PULANDO %s (já carregado)", fpath.name)
                 continue
 
@@ -272,11 +300,21 @@ class CvmAdapter(BaseSourceAdapter):
 
                 if local_file.suffix.lower() == ".zip":
                     rows = self.load_single_zip(
-                        conn, local_file, group_name=group_name, tablespace=tablespace
+                        conn,
+                        local_file,
+                        group_name=group_name,
+                        tablespace=tablespace,
+                        sha256=digest,
+                        source_name=fpath.name,
                     )
                 else:
                     rows = self.load_single_csv(
-                        conn, local_file, group_name=group_name, tablespace=tablespace
+                        conn,
+                        local_file,
+                        group_name=group_name,
+                        tablespace=tablespace,
+                        sha256=digest,
+                        source_name=fpath.name,
                     )
 
                 total_rows += rows

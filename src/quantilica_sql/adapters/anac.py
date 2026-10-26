@@ -12,6 +12,7 @@ import psycopg
 from psycopg import sql
 
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.core.atomic import file_sha256
 from quantilica_sql.core.copy_stream import copy_from_file
 from quantilica_sql.database import ensure_schema
 
@@ -84,6 +85,8 @@ class AnacAdapter(BaseSourceAdapter):
         file_path: Path,
         group_name: str = "",
         tablespace: str | None = None,
+        sha256: str | None = None,
+        source_name: str | None = None,
     ) -> int:
         table_name = self._derive_table_name(file_path.name, group_name)
 
@@ -118,25 +121,35 @@ class AnacAdapter(BaseSourceAdapter):
             conn, table_name, col_names, tablespace=tablespace, add_source_col=True
         )
 
-        rows = copy_from_file(
+        filename = source_name or file_path.name
+        with self.atomic_file(
             conn,
-            schema=self.schema,
             table=table_name,
-            file_path=file_path,
-            columns=norm_cols,
-            delimiter=delimiter,
-            null_value="",
-            encoding="UTF8" if "utf" in encoding.lower() else "LATIN1",
-        )
-
-        self.record_and_commit(
-            conn,
-            filename=file_path.name,
+            filename=filename,
             dataset="anac",
-            rows_loaded=rows,
             particao=group_name,
-            metadata={"tabela": table_name},
-        )
+            sha256=sha256,
+        ):
+            rows = copy_from_file(
+                conn,
+                schema=self.schema,
+                table=table_name,
+                file_path=file_path,
+                columns=norm_cols,
+                delimiter=delimiter,
+                null_value="",
+                encoding="UTF8" if "utf" in encoding.lower() else "LATIN1",
+                header=True,
+            )
+
+            self.record_and_commit(
+                conn,
+                filename=filename,
+                dataset="anac",
+                rows_loaded=rows,
+                particao=group_name,
+                metadata={"tabela": table_name},
+            )
         return rows
 
     def load(
@@ -161,7 +174,13 @@ class AnacAdapter(BaseSourceAdapter):
                 if staging_dir:
                     local_file = self.stage_file_locally(source_dir, staging_dir)
                     is_staged = True
-                return self.load_single_csv(conn, local_file, tablespace=tablespace)
+                return self.load_single_csv(
+                    conn,
+                    local_file,
+                    tablespace=tablespace,
+                    sha256=file_sha256(source_dir),
+                    source_name=source_dir.name,
+                )
             finally:
                 if is_staged and local_file.exists():
                     local_file.unlink(missing_ok=True)
@@ -192,9 +211,10 @@ class AnacAdapter(BaseSourceAdapter):
         )
 
         for group_name, fpath in all_files:
-            if not force and self.is_file_already_loaded(
-                conn, fpath.name, dataset="anac", particao=group_name
-            ):
+            do_load, digest = self.should_load_file(
+                conn, fpath, dataset="anac", particao=group_name, force=force
+            )
+            if not do_load:
                 logger.info("  PULANDO %s (já carregado)", fpath.name)
                 continue
 
@@ -207,7 +227,12 @@ class AnacAdapter(BaseSourceAdapter):
                     is_staged = True
 
                 rows = self.load_single_csv(
-                    conn, local_file, group_name=group_name, tablespace=tablespace
+                    conn,
+                    local_file,
+                    group_name=group_name,
+                    tablespace=tablespace,
+                    sha256=digest,
+                    source_name=fpath.name,
                 )
                 total_rows += rows
                 total_loaded += 1
