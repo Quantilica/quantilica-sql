@@ -12,6 +12,7 @@ from typing import Any
 logger = logging.getLogger("quantilica_sql.validator")
 
 VALID_STRATEGIES = ("replace", "view")
+VALID_ENGINES = frozenset({"postgres", "duckdb"})
 
 
 class Severity(StrEnum):
@@ -133,6 +134,13 @@ class PipelineValidator:
             if not isinstance(rel, str) or not rel:
                 report.error(f"pipeline {pid!r}: 'path' ausente", manifest_path)
                 continue
+            engine = item.get("engine")
+            if engine is not None and engine not in VALID_ENGINES:
+                report.error(
+                    f"pipeline {pid!r}: engine {engine!r} inválido "
+                    f"(use {', '.join(sorted(VALID_ENGINES))})",
+                    manifest_path,
+                )
             pdir = root / rel
             if not pdir.is_dir():
                 report.error(
@@ -336,6 +344,11 @@ class PipelineValidator:
         manifest = root / "manifest.toml"
         if manifest.exists():
             report.extend(self.validate_manifest(manifest))
+            for d in _dirs_fora_do_manifest(root, manifest):
+                report.error(
+                    f"pipeline {d.relative_to(root)} não está coberto pelo manifest",
+                    manifest,
+                )
         else:
             report.warn("manifest.toml ausente", root)
         for d in sorted(
@@ -347,6 +360,31 @@ class PipelineValidator:
         ):
             report.extend(self.validate_pipeline_dir(d))
         return report
+
+
+def _dirs_fora_do_manifest(root: Path, manifest: Path) -> list[Path]:
+    """Diretórios com ``transform.toml`` fora de qualquer ``path`` do manifest.
+
+    Um ``path`` cobre o diretório e seus descendentes (``run_subtree``).
+    """
+    try:
+        with open(manifest, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    entries = list(data.get("pipelines", {}).values()) + list(data.get("pipeline", []))
+    covered = [
+        (root / e["path"]).resolve()
+        for e in entries
+        if isinstance(e, dict) and isinstance(e.get("path"), str)
+    ]
+    if not covered:
+        return []
+    return sorted(
+        d
+        for d in {p.parent for p in root.rglob("transform.toml")}
+        if not any(d.resolve() == c or c in d.resolve().parents for c in covered)
+    )
 
 
 def find_pipeline_dirs(root: Path) -> list[Path]:

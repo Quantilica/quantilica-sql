@@ -390,3 +390,65 @@ def test_run_pipeline_not_found(monkeypatch, tmp_path):
     )
     with pytest.raises(FileNotFoundError):
         run_pipeline("nada/aqui")
+
+
+# --------------------------------------------------------------------------
+# Manifest: completude e engine
+# --------------------------------------------------------------------------
+
+
+def _catalogo(tmp_path: Path, manifest: str) -> Path:
+    write(tmp_path / "a" / "um" / "transform.toml", TRANSFORM_OK)
+    write(tmp_path / "a" / "um" / "t.sql", "SELECT 1")
+    write(tmp_path / "b" / "dois" / "transform.toml", TRANSFORM_OK)
+    write(tmp_path / "b" / "dois" / "t.sql", "SELECT 1")
+    write(tmp_path / "manifest.toml", manifest)
+    return tmp_path
+
+
+TRANSFORM_OK = """
+[[table]]
+name = "t"
+schema = "analytics"
+strategy = "replace"
+sql = "t.sql"
+"""
+
+MANIFEST_BASE = """
+[catalog]
+name = "x"
+
+[pipelines.a]
+path = "a"
+{extra}
+"""
+
+
+def test_catalogo_com_pipeline_fora_do_manifest_e_erro(tmp_path):
+    root = _catalogo(tmp_path, MANIFEST_BASE.format(extra=""))
+    report = PipelineValidator().validate_catalog(root)
+    mensagens = [i.message for i in report.errors]
+    assert any("b/dois" in m and "não está coberto" in m for m in mensagens)
+    assert not any("a/um" in m and "não está coberto" in m for m in mensagens)
+
+
+def test_path_do_manifest_cobre_os_descendentes(tmp_path):
+    manifesto = MANIFEST_BASE.format(extra="") + '\n[pipelines.b]\npath = "b"\n'
+    report = PipelineValidator().validate_catalog(_catalogo(tmp_path, manifesto))
+    assert report.ok, [str(i) for i in report.errors]
+
+
+def test_engine_invalido_no_manifest(tmp_path):
+    manifesto = MANIFEST_BASE.format(extra='engine = "spark"') + (
+        '\n[pipelines.b]\npath = "b"\n'
+    )
+    report = PipelineValidator().validate_catalog(_catalogo(tmp_path, manifesto))
+    assert any("engine 'spark' inválido" in i.message for i in report.errors)
+
+
+def test_engines_validos(tmp_path):
+    manifesto = (
+        MANIFEST_BASE.format(extra='engine = "postgres"')
+        + '\n[pipelines.b]\npath = "b"\nengine = "duckdb"\n'
+    )
+    assert PipelineValidator().validate_catalog(_catalogo(tmp_path, manifesto)).ok

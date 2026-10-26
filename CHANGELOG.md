@@ -15,6 +15,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `LegacyLoadError`: recarregar (`--force` ou hash novo) um arquivo cuja carga anterior não tem `_arquivo` falha em vez de duplicar linhas.
 - Testes de integração com PostgreSQL real (`QUANTILICA_TEST_DATABASE_URL`; pulados sem ela).
 
+### Adicionado (catálogo)
+- `quantilica sql validate [caminho] [--strict]`: valida manifest, `fetch.toml` e `transform.toml` sem banco. Erro quando um `transform.toml` não é coberto por nenhum `path` do manifest ou quando o `engine` de uma entrada não é `postgres` nem `duckdb`.
+
 ### Alterado
 - `quantilica-core>=0.12.0` (leitura do sidecar de manifesto).
 - `copy_from_file/rows/stream` e o tracker não commitam mais dentro de `atomic_file_load`; fora dele o comportamento é o mesmo.

@@ -76,3 +76,23 @@ def test_cli_load_flags():
     assert "tablespace" in clean
     assert "staging-dir" in clean
     assert "force" in clean
+
+
+def test_cli_validate_catalogo_real_e_falha_em_manifest_incompleto(tmp_path):
+    from pathlib import Path
+
+    from typer.testing import CliRunner
+
+    from quantilica_sql.cli import app
+
+    runner = CliRunner()
+    catalogo = Path(__file__).resolve().parents[2] / "quantilica-pipelines"
+    if (catalogo / "manifest.toml").exists():
+        ok = runner.invoke(app, ["validate", str(catalogo), "--strict"])
+        assert ok.exit_code == 0, ok.output
+
+    (tmp_path / "manifest.toml").write_text(
+        '[catalog]\nname = "x"\n\n[pipelines.a]\npath = "a"\n', encoding="utf-8"
+    )
+    res = runner.invoke(app, ["validate", str(tmp_path)])
+    assert res.exit_code == 1

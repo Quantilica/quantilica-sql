@@ -16,6 +16,7 @@ from quantilica_sql.database import get_connection, inspect_schemas
 from quantilica_sql.plugin_manager import PluginManager
 from quantilica_sql.runner import run_pipeline
 from quantilica_sql.scaffold import scaffold_catalog, scaffold_pipeline
+from quantilica_sql.validator import PipelineValidator
 
 app = typer.Typer(
     name="sql",
@@ -182,6 +183,32 @@ def cmd_run(
     except Exception as exc:
         console.print(f"[red]Erro ao executar pipeline '{pipeline}':[/red] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+@app.command("validate")
+def cmd_validate(
+    catalog: Annotated[
+        Path,
+        typer.Argument(help="Raiz do catálogo (com manifest.toml) ou de um pipeline"),
+    ] = Path("."),
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Trata avisos como erros."),
+    ] = False,
+) -> None:
+    """Valida manifest, fetch.toml e transform.toml de um catálogo, sem banco."""
+    validator = PipelineValidator()
+    if (catalog / "manifest.toml").exists():
+        report = validator.validate_catalog(catalog)
+    else:
+        report = validator.validate_pipeline_dir(catalog)
+    for issue in report.errors:
+        console.print(f"[red]erro[/red] {issue}")
+    for issue in report.warnings:
+        console.print(f"[yellow]aviso[/yellow] {issue}")
+    if report.errors or (strict and report.warnings):
+        raise typer.Exit(code=1)
+    console.print("[green]Catálogo válido.[/green]")
 
 
 @app.command("tablespaces")
