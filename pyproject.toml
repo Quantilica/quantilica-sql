@@ -50,6 +50,9 @@ analysis = [
     "polars>=1.0.0",
     "pyarrow>=14.0.0",
 ]
+lake = [
+    "duckdb>=1.2",
+]
 
 [project.entry-points."quantilica.commands"]
 sql = "quantilica_sql.cli:app"

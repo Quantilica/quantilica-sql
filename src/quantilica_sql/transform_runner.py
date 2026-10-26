@@ -6,6 +6,7 @@ import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import psycopg
 from psycopg import sql
@@ -30,6 +31,7 @@ class TableSpec:
     sql_path: Path
     primary_key: tuple[str, ...] = ()
     indexes: tuple[IndexSpec, ...] = field(default_factory=tuple)
+    engine: str = "postgres"
 
     @property
     def qualified(self) -> str:
@@ -38,6 +40,12 @@ class TableSpec:
 
 _NEW = "__new"
 _OLD = "__old"
+_DROP_KIND = {
+    "r": "TABLE",
+    "p": "TABLE",
+    "m": "MATERIALIZED VIEW",
+    "v": "VIEW",
+}
 
 
 def _quote(identifier: str) -> str:
@@ -128,7 +136,9 @@ def _dependent_views(
 
 
 def load_table_specs(
-    transform_toml: Path, target_schema: str | None = None
+    transform_toml: Path,
+    target_schema: str | None = None,
+    default_engine: str = "postgres",
 ) -> list[TableSpec]:
     """Valida e carrega as entradas ``[[table]]`` de um transform.toml."""
     report = PipelineValidator().validate_transform(transform_toml)
@@ -145,6 +155,7 @@ def load_table_specs(
             schema=target_schema or t["schema"],
             strategy=t["strategy"],
             sql_path=transform_toml.parent / t["sql"],
+            engine=t.get("engine", default_engine),
             primary_key=tuple(t.get("primary_key", ())),
             indexes=tuple(
                 IndexSpec(ix["name"], tuple(ix["columns"]), ix.get("unique", False))
@@ -170,25 +181,58 @@ class TransformRunner:
         self,
         raw_schema: str | None = None,
         target_schema: str | None = None,
+        lake: Path | None = None,
+        default_engine: str = "postgres",
     ) -> None:
         # Schema de origem (raw) colocado no search_path; o destino é sempre
         # qualificado via ``schema`` de cada [[table]] (ou por target_schema).
         self.raw_schema = raw_schema
         self.target_schema = target_schema
+        self.lake = lake
+        self.default_engine = default_engine
 
     def run_transform_toml(
         self, conn: psycopg.Connection, transform_toml: Path
     ) -> list[str]:
-        """Executa todas as entradas; retorna ``schema.name`` das materializadas."""
+        """Executa todas as entradas; retorna ``schema.name`` das materializadas.
+
+        Entradas ``engine = "duckdb"`` rodam sobre o lake, numa conexão DuckDB
+        compartilhada pelo arquivo (e preparada pelo ``prelude``, se houver).
+        """
+        specs = load_table_specs(
+            transform_toml, self.target_schema, self.default_engine
+        )
+        duck = None
         done = []
-        for spec in load_table_specs(transform_toml, self.target_schema):
-            self.run_table(conn, spec)
-            done.append(spec.qualified)
+        try:
+            for spec in specs:
+                if spec.engine == "duckdb" and duck is None:
+                    duck = self._open_duck(transform_toml)
+                self.run_table(conn, spec, duck=duck)
+                done.append(spec.qualified)
+        finally:
+            if duck is not None:
+                duck.close()
         return done
 
-    def run_table(self, conn: psycopg.Connection, spec: TableSpec) -> None:
+    def _open_duck(self, transform_toml: Path):
+        from quantilica_sql.lake.duck import connect_lake
+
+        duck = connect_lake(self.lake)
+        with open(transform_toml, "rb") as f:
+            prelude = tomllib.load(f).get("prelude")
+        if prelude:
+            text = (transform_toml.parent / prelude).read_text(encoding="utf-8")
+            duck.execute(text)
+        return duck
+
+    def run_table(
+        self, conn: psycopg.Connection, spec: TableSpec, duck: Any = None
+    ) -> None:
         query = _read_query(spec.sql_path)
-        logger.info("Materializando %s (%s)", spec.qualified, spec.strategy)
+        logger.info(
+            "Materializando %s (%s, %s)", spec.qualified, spec.strategy, spec.engine
+        )
         # Bloco transacional por entrada: rollback isola falhas.
         with conn.transaction(), conn.cursor() as cur:
             cur.execute(
@@ -203,7 +247,15 @@ class TransformRunner:
                     )
                 )
             target = sql.Identifier(spec.schema, spec.name)
-            if spec.strategy == "replace":
+            if spec.engine == "duckdb":
+                if spec.strategy != "replace":
+                    raise ValueError(
+                        f"{spec.qualified}: engine duckdb só aceita strategy replace"
+                    )
+                self._replace_duckdb(cur, spec, target, duck)
+            elif spec.engine != "postgres":
+                raise ValueError(f"Engine desconhecido: {spec.engine!r}")
+            elif spec.strategy == "replace":
                 self._replace(cur, spec, target, query)
             elif spec.strategy == "view":
                 self._view(cur, target, query)
@@ -220,10 +272,32 @@ class TransformRunner:
         qualquer lock no destino; só então as views dependentes são removidas, os
         nomes trocados e as views recriadas. O ``ACCESS EXCLUSIVE`` dura só a troca.
         """
-        schema, name = spec.schema, spec.name
-        new = sql.Identifier(schema, f"{name}{_NEW}")
+        new = sql.Identifier(spec.schema, f"{spec.name}{_NEW}")
         cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(new))
         cur.execute(sql.SQL("CREATE TABLE {} AS ").format(new) + query)
+        TransformRunner._swap_in(cur, spec, target)
+
+    @staticmethod
+    def _replace_duckdb(
+        cur: psycopg.Cursor, spec: TableSpec, target: sql.Identifier, duck: Any
+    ) -> None:
+        """Mesma troca atômica, com a tabela nova vinda de uma consulta DuckDB."""
+        from quantilica_sql.lake.duck import load_query_into_table
+
+        new = sql.Identifier(spec.schema, f"{spec.name}{_NEW}")
+        cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(new))
+        query = spec.sql_path.read_text(encoding="utf-8")
+        load_query_into_table(duck, query, cur, spec.schema, f"{spec.name}{_NEW}")
+        TransformRunner._swap_in(cur, spec, target)
+
+    @staticmethod
+    def _swap_in(cur: psycopg.Cursor, spec: TableSpec, target: sql.Identifier) -> None:
+        """PK e índices na tabela nova e troca de nomes (``<nome>__new`` → ``<nome>``).
+
+        O destino pode ser tabela, view ou materialized view; é removido na troca.
+        """
+        schema, name = spec.schema, spec.name
+        new = sql.Identifier(schema, f"{name}{_NEW}")
         if spec.primary_key:
             cur.execute(
                 sql.SQL("ALTER TABLE {} ADD PRIMARY KEY ({})").format(
@@ -240,9 +314,13 @@ class TransformRunner:
                 )
             )
 
-        cur.execute("SELECT to_regclass(%s)", (f"{_quote(schema)}.{_quote(name)}",))
+        cur.execute(
+            "SELECT relkind FROM pg_class WHERE oid = to_regclass(%s)",
+            (f"{_quote(schema)}.{_quote(name)}",),
+        )
         row = cur.fetchone()
-        exists = row is not None and row[0] is not None
+        kind = row[0] if row is not None else None
+        exists = kind is not None
         dependents = _dependent_views(cur, schema, name) if exists else []
         for dep in reversed(dependents):
             cur.execute(
@@ -259,7 +337,8 @@ class TransformRunner:
             sql.SQL("ALTER TABLE {} RENAME TO {}").format(new, sql.Identifier(name))
         )
         if exists:
-            cur.execute(sql.SQL("DROP TABLE {}").format(old))
+            drop = _DROP_KIND.get(kind, "TABLE")
+            cur.execute(sql.SQL("DROP {} {}").format(sql.SQL(drop), old))
         if spec.primary_key:
             cur.execute(
                 sql.SQL("ALTER INDEX {} RENAME TO {}").format(

@@ -96,3 +96,31 @@ def test_cli_validate_catalogo_real_e_falha_em_manifest_incompleto(tmp_path):
     )
     res = runner.invoke(app, ["validate", str(tmp_path)])
     assert res.exit_code == 1
+
+
+def test_cli_lake_convert_e_status(tmp_path):
+    import pytest
+    from typer.testing import CliRunner
+
+    pytest.importorskip("duckdb")
+    from quantilica_sql.cli import app
+
+    runner = CliRunner()
+    pasta = tmp_path / "tesouro-direto" / "operacoes-do-tesouro-direto"
+    pasta.mkdir(parents=True)
+    (pasta / "operacoes-do-tesouro-direto@20261016T000000.csv").write_text(
+        "Codigo do Investidor;Valor da Operacao\n1;10,5\n", encoding="utf-8"
+    )
+    lake = tmp_path / "lake"
+    args = ["lake", "convert", "tesouro-direto", "-s", str(tmp_path / "tesouro-direto")]
+    res = runner.invoke(app, [*args, "--lake", str(lake)])
+    assert res.exit_code == 0, res.output
+    assert "1 convertidos" in " ".join(res.output.split())
+    again = runner.invoke(app, [*args, "--lake", str(lake)])
+    saida = " ".join(again.output.split())
+    assert "0 convertidos" in saida and "1 sem mudança" in saida
+    status = runner.invoke(app, ["lake", "status", "--lake", str(lake)])
+    assert "operacoes-do-tesouro-direto" in status.output
+
+    desconhecida = runner.invoke(app, ["lake", "convert", "inexistente"])
+    assert desconhecida.exit_code == 2

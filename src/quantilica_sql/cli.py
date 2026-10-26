@@ -27,6 +27,9 @@ app = typer.Typer(
 plugin_app = typer.Typer(help="Gerenciamento de repositórios de pipelines (plugins).")
 app.add_typer(plugin_app, name="plugin")
 
+lake_app = typer.Typer(help="Lake de Parquet para microdados (extra 'lake').")
+app.add_typer(lake_app, name="lake")
+
 maint_app = typer.Typer(help="Tarefas de manutenção, índices e tablespaces.")
 app.add_typer(maint_app, name="maintenance")
 
@@ -209,6 +212,88 @@ def cmd_validate(
     if report.errors or (strict and report.warnings):
         raise typer.Exit(code=1)
     console.print("[green]Catálogo válido.[/green]")
+
+
+def _require_lake():
+    try:
+        import duckdb  # noqa: F401
+    except ImportError as exc:
+        console.print(
+            "[red]O lake exige o extra 'lake':[/red] "
+            "uv add 'quantilica-sql[lake]' (instala o duckdb)"
+        )
+        raise typer.Exit(code=2) from exc
+
+
+@lake_app.command("convert")
+def cmd_lake_convert(
+    source: Annotated[
+        str, typer.Argument(help="Fonte: pdet, rfb-cnpj, tesouro-direto")
+    ],
+    source_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--source-dir", "-s", help="Pasta da fonte (default: storage/<fonte>)"
+        ),
+    ] = None,
+    dataset: Annotated[
+        str | None, typer.Option("--dataset", help="Converte só este dataset")
+    ] = None,
+    lake: Annotated[
+        Path | None, typer.Option("--lake", help="Raiz do lake (QUANTILICA_LAKE_DIR)")
+    ] = None,
+    force: Annotated[
+        bool, typer.Option("--force", help="Reconverte mesmo com o mesmo hash")
+    ] = False,
+) -> None:
+    """Converte os arquivos brutos de uma fonte em Parquet (idempotente por hash)."""
+    _require_lake()
+    from quantilica_sql.config import get_settings
+    from quantilica_sql.lake import convert_tree, lake_root, sources
+
+    if source not in sources():
+        console.print(
+            f"[red]Fonte sem lake:[/red] {source}. Opções: {', '.join(sources())}"
+        )
+        raise typer.Exit(code=2)
+    root = source_dir or get_settings().storage_root / source
+    if not root.is_dir():
+        console.print(f"[red]Pasta não encontrada:[/red] {root}")
+        raise typer.Exit(code=1)
+    summary = convert_tree(source, root, dataset=dataset, lake=lake, force=force)
+    console.print(
+        f"lake {lake_root(lake)}: {summary.converted} convertidos "
+        f"({summary.rows:,} linhas), {summary.skipped} sem mudança, "
+        f"{len(summary.errors)} com erro"
+    )
+    for path, message in summary.errors:
+        console.print(f"[red]erro[/red] {path}: {message}")
+    if not summary.ok:
+        raise typer.Exit(code=1)
+
+
+@lake_app.command("status")
+def cmd_lake_status(
+    lake: Annotated[Path | None, typer.Option("--lake", help="Raiz do lake")] = None,
+) -> None:
+    """Mostra arquivos, linhas e tamanho de cada dataset do lake."""
+    _require_lake()
+    from quantilica_sql.lake import lake_root
+
+    root = lake_root(lake)
+    table = Table(title=f"Lake: {root}")
+    for col in ("Fonte", "Dataset", "Arquivos", "MB"):
+        table.add_column(col)
+    for source_dir in sorted(p for p in root.glob("*") if p.is_dir()):
+        if source_dir.name.startswith("."):
+            continue
+        for dataset_dir in sorted(p for p in source_dir.iterdir() if p.is_dir()):
+            files = list(dataset_dir.rglob("*.parquet"))
+            size = sum(f.stat().st_size for f in files) / 1_048_576
+            table.add_row(
+                source_dir.name, dataset_dir.name, str(len(files)), f"{size:,.1f}"
+            )
+    console.print(table)
 
 
 @app.command("tablespaces")

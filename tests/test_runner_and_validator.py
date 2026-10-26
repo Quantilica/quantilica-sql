@@ -241,7 +241,7 @@ def test_replace_sequence(tmp_path):
         'ALTER TABLE "analytics"."t__new" ADD PRIMARY KEY ("a", "b")',
         'CREATE UNIQUE INDEX "ix_a__new" ON "analytics"."t__new" ("a")',
         'CREATE INDEX "ix_b__new" ON "analytics"."t__new" ("b")',
-        "SELECT to_regclass(%s)",
+        "SELECT relkind FROM pg_class WHERE oid = to_regclass(%s)",
         'ALTER TABLE "analytics"."t__new" RENAME TO "t"',
         'ALTER INDEX "analytics"."t__new_pkey" RENAME TO "t_pkey"',
         'ALTER INDEX "analytics"."ix_a__new" RENAME TO "ix_a"',

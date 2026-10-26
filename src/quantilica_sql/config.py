@@ -24,6 +24,12 @@ class Settings:
             os.environ.get("QUANTILICA_STORAGE_ROOT", "./data")
         )
     )
+    lake_dir: Path = field(
+        default_factory=lambda: Path(
+            os.environ.get("QUANTILICA_LAKE_DIR")
+            or Path(os.environ.get("QUANTILICA_STORAGE_ROOT", "./data")).parent / "lake"
+        )
+    )
     staging_dir: Path = field(
         default_factory=lambda: Path(
             os.environ.get("QUANTILICA_STAGING_DIR", tempfile.gettempdir())

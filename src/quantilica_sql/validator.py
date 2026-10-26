@@ -245,6 +245,15 @@ class PipelineValidator:
             report.error("[[table]] ausente ou vazio", transform_path)
             return report
 
+        prelude = data.get("prelude")
+        if prelude is not None:
+            if not isinstance(prelude, str) or not prelude:
+                report.error(
+                    "'prelude' deve ser o caminho de um arquivo sql", transform_path
+                )
+            elif not (transform_path.parent / prelude).is_file():
+                report.error(f"arquivo prelude {prelude!r} não existe", transform_path)
+
         seen: set[tuple[str, str]] = set()
         for i, t in enumerate(tables, 1):
             tag = f"[[table]] #{i}"
@@ -262,6 +271,17 @@ class PipelineValidator:
                     report.error(f"{tag}: {schema}.{name} duplicado", transform_path)
                 seen.add((schema, name))
             strategy = t.get("strategy")
+            engine = t.get("engine")
+            if engine is not None and engine not in VALID_ENGINES:
+                report.error(
+                    f"{tag}: engine {engine!r} inválido "
+                    f"(use {', '.join(sorted(VALID_ENGINES))})",
+                    transform_path,
+                )
+            if engine == "duckdb" and strategy == "view":
+                report.error(
+                    f"{tag}: engine duckdb só aceita strategy replace", transform_path
+                )
             if isinstance(strategy, str) and strategy not in VALID_STRATEGIES:
                 report.error(
                     f"{tag}: strategy {strategy!r} inválida (use {VALID_STRATEGIES})",

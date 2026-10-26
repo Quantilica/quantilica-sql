@@ -78,6 +78,29 @@ def iter_transform_dirs(root: Path) -> list[Path]:
     return ordered
 
 
+def engine_for(pipeline_dir: Path) -> str:
+    """Engine padrão do pipeline: o da entrada do manifest que o cobre (ou postgres)."""
+    target = pipeline_dir.resolve()
+    roots = [Path(WORKSPACE_CATALOG)]
+    roots += [Path(plug["path"]) for plug in PluginManager().list_plugins()]
+    for root in roots:
+        manifest = root / "manifest.toml"
+        if not manifest.is_file():
+            continue
+        with open(manifest, "rb") as f:
+            data = tomllib.load(f)
+        entries = list(data.get("pipelines", {}).values()) + list(
+            data.get("pipeline", [])
+        )
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                continue
+            base = (root / entry["path"]).resolve()
+            if target == base or base in target.parents:
+                return entry.get("engine", "postgres")
+    return "postgres"
+
+
 def run_pipeline(
     pipeline_name: str,
     raw_schema: str | None = None,
@@ -96,7 +119,9 @@ def run_pipeline(
     with get_connection() as conn:
         for d in iter_transform_dirs(pipeline_dir):
             runner = TransformRunner(
-                raw_schema or infer_raw_schema(d), target_schema=target_schema
+                raw_schema or infer_raw_schema(d),
+                target_schema=target_schema,
+                default_engine=engine_for(d),
             )
             materialized.extend(runner.run_transform_toml(conn, d / "transform.toml"))
 

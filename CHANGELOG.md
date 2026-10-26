@@ -15,6 +15,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `LegacyLoadError`: recarregar (`--force` ou hash novo) um arquivo cuja carga anterior não tem `_arquivo` falha em vez de duplicar linhas.
 - Testes de integração com PostgreSQL real (`QUANTILICA_TEST_DATABASE_URL`; pulados sem ela).
 
+### Adicionado (lake)
+- Extra `lake` (`duckdb`) e módulo `quantilica_sql.lake`: converte CSV/TXT, ZIP e 7z em Parquet em streaming (latin-1 nativo), um arquivo por origem, idempotente por `sha256` (guardado nos metadados do Parquet) e com substituição quando o arquivo é republicado com outra data no nome. Colunas como texto, nomes normalizados.
+- `quantilica sql lake convert <fonte>` e `lake status`; `QUANTILICA_LAKE_DIR`.
+- Especificações para PDET (RAIS/CAGED), RFB-CNPJ (layout oficial, sem cabeçalho) e os microdados do Tesouro Direto.
+- Engine `duckdb` no `transform.toml` (por tabela) e no `manifest.toml` (por pipeline): a consulta roda sobre as views do lake e o resultado é materializado no PostgreSQL por COPY, com a troca atômica do `replace`; tipos mapeados do DuckDB, NULL distinto de texto vazio. `prelude` opcional com views compartilhadas.
+- A troca atômica aceita substituir uma materialized view (ou view) existente pela tabela nova.
+
 ### Adicionado (catálogo)
 - `quantilica sql validate [caminho] [--strict]`: valida manifest, `fetch.toml` e `transform.toml` sem banco. Erro quando um `transform.toml` não é coberto por nenhum `path` do manifest ou quando o `engine` de uma entrada não é `postgres` nem `duckdb`.
 
