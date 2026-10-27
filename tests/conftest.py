@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -12,13 +14,11 @@ def write_hive(tmp_path):
     """Fábrica que grava um Parquet de texto em ``<lake>/<fonte>/<dataset>/<k>=<v>/``.
 
     Imita o que o conversor de um fetcher produz: colunas de texto com nomes
-    normalizados, partição Hive e ``_dataset.json`` com o apelido da view.
+    normalizados (e o ``rename`` do conversor), partição Hive e ``_dataset.json``
+    com o apelido da view.
     """
     duckdb = pytest.importorskip("duckdb")
     from quantilica.core.lake import DatasetDescriptor
-
-    import re
-    import unicodedata
 
     def normalize_name(name: str) -> str:
         s = (
@@ -53,11 +53,13 @@ def write_hive(tmp_path):
         partition_types: dict[str, str] | None = None,
         descriptor: bool = True,
         sep: str = ";",
+        rename: dict[str, str] | None = None,
     ) -> Path:
         csv = tmp_path / f"{key}.csv"
         csv.write_text(csv_text, encoding="utf-8")
         header = csv_text.splitlines()[0].split(sep)
         names = unique_names([normalize_name(h) for h in header])
+        names = [(rename or {}).get(n, n) for n in names]
         columns = ", ".join(f"'{h}': 'VARCHAR'" for h in header)
         select = ", ".join(
             f'"{h}" AS "{n}"' for h, n in zip(header, names, strict=True)

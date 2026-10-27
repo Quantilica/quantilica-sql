@@ -30,7 +30,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Chaves de partição Hive não tipadas explicitamente no descritor assumem `VARCHAR` por padrão em `_hive_types`, garantindo que zeros à esquerda e identificadores textuais sejam preservados sem coerção numérica indevida pelo DuckDB.
 - Expurgo dos módulos conversores e especificações pré-Hive legados (`quantilica_sql.lake.convert` e `specs`), mantendo `quantilica_sql.lake` focado exclusivamente como motor DuckDB e integração com marts SQL.
 - `quantilica sql lake convert <fonte>` vira atalho para o conversor do fetcher, achado pelo entry point `quantilica.lake` (`load_lake_converter`): chama `convert(origem, lake, datasets=[...], force=...)` e mostra convertidos, pulados e erros. Sai com código 1 se houver erro ou se a fonte não tiver conversor instalado (a mensagem orienta `quantilica install <fonte> --extra analysis`; antes, fonte desconhecida saía com código 2). O comando não exige mais o extra `lake`.
-- Depende de `quantilica.core.lake`, que ainda não saiu em release do `quantilica-core` (está em `[Unreleased]` depois da 0.12.1): o pin de `quantilica-core` sobe quando houver release.
+- Depende de `quantilica.core.lake`: o pin passa a `quantilica-core>=0.13.0`, a primeira versão com o módulo.
 
 ### Adicionado (paridade)
 - `quantilica sql compare <schema_a> <schema_b> [-t tabela]`: compara tabela a tabela (colunas, contagem e `EXCEPT ALL` nos dois sentidos) e sai com código 1 se houver diferença. Serve de gate antes de trocar tabelas por versões recalculadas.

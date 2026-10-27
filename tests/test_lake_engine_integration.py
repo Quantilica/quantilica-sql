@@ -46,6 +46,8 @@ def lake(tmp_path, write_hive) -> Path:
         key="investidores-do-tesouro-direto-de-2018",
         partition="2018",
         alias="investidores",
+        # o conversor do Tesouro Direto renomeia a idade (publicações antigas)
+        rename={"idade": "idade_do_investidor"},
     )
     return raiz
 
