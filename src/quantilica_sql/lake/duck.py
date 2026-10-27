@@ -10,10 +10,11 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
+from quantilica.core.lake import DESCRIPTOR_FILENAME, DatasetDescriptor
 
 from quantilica_sql.config import get_settings
-from quantilica_sql.lake.convert import _lit, lake_root
-from quantilica_sql.lake.specs import get_spec, normalize_name
+from quantilica_sql.lake.convert import LakeError, _lit, lake_root
+from quantilica_sql.lake.specs import normalize_name
 
 _NULL = "\\N"
 
@@ -54,12 +55,44 @@ def pg_type(duck_type: str) -> str:
     return "text"
 
 
+# Nomes de tipo de partição do descritor que o DuckDB não conhece (ou lê diferente).
+_HIVE_TYPES = {
+    "str": "VARCHAR",
+    "string": "VARCHAR",
+    "int": "BIGINT",
+    "integer": "BIGINT",
+    "float": "DOUBLE",
+    "float64": "DOUBLE",
+}
+
+
+def _hive_types(partition_types: dict[str, str]) -> str:
+    """``hive_types = {...}`` a partir de ``partition_types`` do descritor."""
+    items = ", ".join(
+        f"{_lit(key)}: {_lit(_HIVE_TYPES.get(t.strip().lower(), t.strip().upper()))}"
+        for key, t in partition_types.items()
+    )
+    return f"hive_types = {{{items}}}"
+
+
+def _load_descriptor(dataset_dir: Path) -> DatasetDescriptor | None:
+    """Descritor do dataset, ou ``None`` se não há ``_dataset.json``."""
+    if not (dataset_dir / DESCRIPTOR_FILENAME).is_file():
+        return None
+    try:
+        return DatasetDescriptor.load(dataset_dir)
+    except (OSError, ValueError) as exc:
+        raise LakeError(f"{dataset_dir / DESCRIPTOR_FILENAME} inválido: {exc}") from exc
+
+
 def connect_lake(lake: Path | None = None):
     """Conexão DuckDB em memória com uma view por dataset: ``<fonte>.<dataset>``.
 
-    A fonte e o dataset são normalizados (``rfb-cnpj`` → ``rfb_cnpj``); datasets com
-    apelido na especificação usam o apelido (``tesouro_direto.investidores``). Cada view
-    expõe ``_arquivo`` (nome do Parquet de origem) além das colunas do dataset.
+    O layout é Hive (``<fonte>/<dataset>/<chave>=<valor>/<arquivo>.parquet``). A fonte é
+    normalizada (``rfb-cnpj`` → ``rfb_cnpj``); o nome da view é o ``alias`` do
+    ``_dataset.json`` (``tesouro_direto.investidores``) ou, sem descritor, o nome do
+    dataset normalizado. As partições viram colunas, com os tipos de
+    ``partition_types``. Cada view expõe ``_arquivo`` (nome do Parquet de origem).
     """
     import duckdb
 
@@ -85,15 +118,23 @@ def connect_lake(lake: Path | None = None):
         for dataset_dir in sorted(p for p in source_dir.iterdir() if p.is_dir()):
             if not any(dataset_dir.rglob("*.parquet")):
                 continue
-            spec = get_spec(source_dir.name, dataset_dir.name)
-            view = spec.view_name if spec else normalize_name(dataset_dir.name)
-            glob = _lit(f"{dataset_dir}/**/*.parquet")
+            descriptor = _load_descriptor(dataset_dir)
+            view = (descriptor.alias if descriptor else None) or normalize_name(
+                dataset_dir.name
+            )
+            options = [
+                _lit(f"{dataset_dir}/**/*.parquet"),
+                "hive_partitioning=true",
+                "union_by_name=true",
+                "filename=true",
+            ]
+            if descriptor and descriptor.partition_types:
+                options.append(_hive_types(descriptor.partition_types))
             conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
             conn.execute(
                 f'CREATE OR REPLACE VIEW "{schema}"."{view}" AS '
                 f"SELECT * EXCLUDE (filename), regexp_extract(filename, '[^/]+$') "
-                f"AS _arquivo FROM read_parquet({glob}, union_by_name=true, "
-                "filename=true)"
+                f"AS _arquivo FROM read_parquet({', '.join(options)})"
             )
     return conn
 

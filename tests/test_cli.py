@@ -99,33 +99,44 @@ def test_cli_validate_catalogo_real_e_falha_em_manifest_incompleto(tmp_path):
     assert res.exit_code == 1
 
 
-def test_cli_lake_convert_e_status(tmp_path):
-    import pytest
+def test_cli_lake_convert_e_status(tmp_path, write_hive, monkeypatch):
     from typer.testing import CliRunner
 
-    pytest.importorskip("duckdb")
     from quantilica_sql.cli import app
 
-    runner = CliRunner()
-    pasta = tmp_path / "tesouro-direto" / "operacoes-do-tesouro-direto"
-    pasta.mkdir(parents=True)
-    (pasta / "operacoes-do-tesouro-direto@20261016T000000.csv").write_text(
-        "Codigo do Investidor;Data da Operacao;Valor da Operacao\n1;01/01/2019;10,5\n",
-        encoding="utf-8",
+    class Conversor:
+        def convert(self, input_dir, lake_dir, *, datasets=None, force=False):
+            write_hive(
+                lake_dir,
+                "tesouro-direto",
+                "operacoes-do-tesouro-direto",
+                "Codigo do Investidor;Valor da Operacao\n1;10,5\n",
+                key="operacoes-do-tesouro-direto-de-2019",
+                partition="2019",
+                alias="operacoes",
+            )
+            return type("R", (), {"converted": 1, "skipped": 0, "errors": []})()
+
+    monkeypatch.setattr(
+        "quantilica.core.lake.load_lake_converter",
+        lambda source: Conversor() if source == "tesouro-direto" else None,
     )
+    runner = CliRunner()
+    pasta = tmp_path / "tesouro-direto"
+    pasta.mkdir()
     lake = tmp_path / "lake"
-    args = ["lake", "convert", "tesouro-direto", "-s", str(tmp_path / "tesouro-direto")]
-    res = runner.invoke(app, [*args, "--lake", str(lake)])
+    res = runner.invoke(
+        app,
+        ["lake", "convert", "tesouro-direto", "-s", str(pasta), "--lake", str(lake)],
+    )
     assert res.exit_code == 0, res.output
-    assert "1 convertidos" in " ".join(res.output.split())
-    again = runner.invoke(app, [*args, "--lake", str(lake)])
-    saida = " ".join(again.output.split())
-    assert "0 convertidos" in saida and "1 sem mudança" in saida
+    assert "convertidos" in res.output
     status = runner.invoke(app, ["lake", "status", "--lake", str(lake)])
     assert "operacoes-do-tesouro-direto" in status.output
 
     desconhecida = runner.invoke(app, ["lake", "convert", "inexistente"])
-    assert desconhecida.exit_code == 2
+    assert desconhecida.exit_code == 1
+    assert "Fonte sem conversor instalado" in desconhecida.output
 
 
 def test_get_adapter_avisa_adaptadores_obsoletos():

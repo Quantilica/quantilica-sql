@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from quantilica_sql import __version__
@@ -226,10 +227,31 @@ def _require_lake():
         raise typer.Exit(code=2) from exc
 
 
+def _convert_counts(result) -> tuple[int, int, int, list]:
+    """``(convertidos, pulados, n_erros, mensagens)`` do retorno de um conversor.
+
+    Os campos podem ser inteiros ou coleções (usa-se o tamanho nas contagens).
+    """
+
+    def count(value) -> int:
+        if value is None:
+            return 0
+        return value if isinstance(value, int) else len(value)
+
+    errors = getattr(result, "errors", None)
+    items = [] if errors is None or isinstance(errors, int) else list(errors)
+    return (
+        count(getattr(result, "converted", None)),
+        count(getattr(result, "skipped", None)),
+        count(errors),
+        items,
+    )
+
+
 @lake_app.command("convert")
 def cmd_lake_convert(
     source: Annotated[
-        str, typer.Argument(help="Fonte: pdet, rfb-cnpj, tesouro-direto")
+        str, typer.Argument(help="Fonte com conversor instalado (ex.: tesouro-direto)")
     ],
     source_dir: Annotated[
         Path | None,
@@ -247,29 +269,49 @@ def cmd_lake_convert(
         bool, typer.Option("--force", help="Reconverte mesmo com o mesmo hash")
     ] = False,
 ) -> None:
-    """Converte os arquivos brutos de uma fonte em Parquet (idempotente por hash)."""
-    _require_lake()
-    from quantilica_sql.config import get_settings
-    from quantilica_sql.lake import convert_tree, lake_root, sources
+    """Converte os arquivos brutos de uma fonte em Parquet Hive (via o fetcher)."""
+    from quantilica.core.lake import load_lake_converter
 
-    if source not in sources():
+    from quantilica_sql.config import get_settings
+    from quantilica_sql.lake import lake_root
+
+    converter = load_lake_converter(source)
+    if converter is None:
         console.print(
-            f"[red]Fonte sem lake:[/red] {source}. Opções: {', '.join(sources())}"
+            f"[red]Fonte sem conversor instalado:[/red] {source}. "
+            f"Instale com: quantilica install {source} --extra analysis"
         )
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=1)
     root = source_dir or get_settings().storage_root / source
     if not root.is_dir():
         console.print(f"[red]Pasta não encontrada:[/red] {root}")
         raise typer.Exit(code=1)
-    summary = convert_tree(source, root, dataset=dataset, lake=lake, force=force)
-    console.print(
-        f"lake {lake_root(lake)}: {summary.converted} convertidos "
-        f"({summary.rows:,} linhas), {summary.skipped} sem mudança, "
-        f"{len(summary.errors)} com erro"
+    target = lake_root(lake)
+    try:
+        result = converter.convert(
+            root,
+            target,
+            datasets=[dataset] if dataset else None,
+            force=force,
+        )
+    except ImportError as exc:
+        console.print(
+            f"[red]O conversor de {source} requer o extra 'analysis':[/red] "
+            f"quantilica install {source} --extra analysis ({exc})"
+        )
+        raise typer.Exit(code=1) from exc
+    converted, skipped, n_errors, messages = _convert_counts(result)
+    summary = Table(show_header=False, box=None, pad_edge=False)
+    summary.add_row("[green]convertidos[/green]", str(converted))
+    summary.add_row("[dim]pulados[/dim]", str(skipped))
+    summary.add_row(
+        "[red]erros[/red]" if n_errors else "[dim]erros[/dim]", str(n_errors)
     )
-    for path, message in summary.errors:
-        console.print(f"[red]erro[/red] {path}: {message}")
-    if not summary.ok:
+    console.print(f"lake {target}")
+    console.print(summary)
+    for message in messages:
+        console.print(f"  [red]✗[/red] {escape(str(message))}")
+    if n_errors:
         raise typer.Exit(code=1)
 
 

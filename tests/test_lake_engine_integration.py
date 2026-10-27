@@ -15,7 +15,7 @@ from psycopg import sql
 
 pytest.importorskip("duckdb")
 
-from quantilica_sql.lake import convert_file, get_spec  # noqa: E402
+from quantilica_sql.core.compare import compare_schemas  # noqa: E402
 from quantilica_sql.lake.duck import connect_lake, pg_type  # noqa: E402
 from quantilica_sql.transform_runner import TransformRunner  # noqa: E402
 from quantilica_sql.validator import PipelineValidator  # noqa: E402
@@ -35,16 +35,18 @@ def schema():
 
 
 @pytest.fixture
-def lake(tmp_path) -> Path:
+def lake(tmp_path, write_hive) -> Path:
     raiz = tmp_path / "lake"
-    spec = get_spec("tesouro-direto", "investidores-do-tesouro-direto")
-    src = tmp_path / "investidores-do-tesouro-direto-de-2018@20261007T000000.csv"
-    src.write_text(
+    write_hive(
+        raiz,
+        "tesouro-direto",
+        "investidores-do-tesouro-direto",
         "Codigo do Investidor;Data de Adesao;Genero;Idade;UF do Investidor\n"
         "1;01/02/2018;M;25;SP\n2;03/04/2018;F;41;RJ\n3;05/06/2018;F;;SP\n",
-        encoding="utf-8",
+        key="investidores-do-tesouro-direto-de-2018",
+        partition="2018",
+        alias="investidores",
     )
-    convert_file(spec, src, lake=raiz)
     return raiz
 
 
@@ -80,6 +82,10 @@ def test_views_do_lake_usam_apelido_e_expoem_o_arquivo_de_origem(lake):
         for d in duck.execute("SELECT * FROM tesouro_direto.investidores").description
     ]
     assert "uf_do_investidor" in cols and "_arquivo" in cols
+    assert "periodo" in cols  # a partição Hive vira coluna
+    assert duck.execute(
+        "SELECT DISTINCT _arquivo, periodo FROM tesouro_direto.investidores"
+    ).fetchall() == [("investidores-do-tesouro-direto-de-2018.parquet", "2018")]
     n = duck.execute("SELECT count(*) FROM tesouro_direto.investidores").fetchone()[0]
     assert n == 3
 
@@ -183,6 +189,28 @@ def test_falha_na_consulta_duckdb_preserva_a_tabela_anterior(tmp_path, lake, sch
     with pytest.raises(Exception, match="coluna_inexistente"):
         _run(toml, lake)
     assert _rows(schema) == [(1,)]
+
+
+def test_compare_confere_duas_execucoes_sobre_o_mesmo_lake(tmp_path, lake, schema):
+    outro = f"{schema}_b"
+    q = (
+        "SELECT uf_do_investidor AS uf, count(*) AS n "
+        "FROM tesouro_direto.investidores GROUP BY 1"
+    )
+    try:
+        _run(_transform(tmp_path, schema, q), lake)
+        _run(_transform(tmp_path, outro, q), lake)
+        with psycopg.connect(URL) as conn:
+            report = compare_schemas(conn, schema, outro, ["t"])
+        assert report.ok
+        assert [d.rows_a for d in report.diffs] == [2]
+    finally:
+        with psycopg.connect(URL, autocommit=True) as conn:
+            conn.execute(
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
+                    sql.Identifier(outro)
+                )
+            )
 
 
 def test_validador_rejeita_view_com_duckdb_e_engine_invalido(tmp_path):

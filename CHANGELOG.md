@@ -25,6 +25,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `DatasetSpec.required`: a conversão recusa um arquivo cujo cabeçalho não tem as colunas mínimas do dataset (por exemplo, uma página HTML de erro no lugar do CSV), sem gravar Parquet.
 - Num ensaio com `target_schema`, o `search_path` resolve o schema de destino antes do schema de origem.
 
+### Alterado (lake)
+- O motor DuckDB (`connect_lake`) passa a consumir o lake Hive pelos descritores `_dataset.json` (`quantilica.core.lake.DatasetDescriptor`): cada dataset vira a view `<fonte>.<alias>` sobre `read_parquet('<dataset>/**/*.parquet', hive_partitioning = true, union_by_name = true, filename = true)`, com `hive_types` vindos de `partition_types` (`int`, `str`, `float64` etc. são traduzidos para tipos do DuckDB). As colunas de partição (por exemplo `periodo`) passam a existir nas views, e `_arquivo` continua com o nome do Parquet de origem. Sem `_dataset.json`, a view usa o nome do dataset normalizado; descritor ilegível levanta `LakeError`.
+- `quantilica sql lake convert <fonte>` vira atalho para o conversor do fetcher, achado pelo entry point `quantilica.lake` (`load_lake_converter`): chama `convert(origem, lake, datasets=[...], force=...)` e mostra convertidos, pulados e erros. Sai com código 1 se houver erro ou se a fonte não tiver conversor instalado (a mensagem orienta `quantilica install <fonte> --extra analysis`; antes, fonte desconhecida saía com código 2). O comando não exige mais o extra `lake`.
+- Depende de `quantilica.core.lake`, que ainda não saiu em release do `quantilica-core` (está em `[Unreleased]` depois da 0.12.1): o pin de `quantilica-core` sobe quando houver release.
+
 ### Adicionado (paridade)
 - `quantilica sql compare <schema_a> <schema_b> [-t tabela]`: compara tabela a tabela (colunas, contagem e `EXCEPT ALL` nos dois sentidos) e sai com código 1 se houver diferença. Serve de gate antes de trocar tabelas por versões recalculadas.
 

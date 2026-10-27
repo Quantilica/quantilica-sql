@@ -173,3 +173,180 @@ def test_convert_tree_isola_o_arquivo_ruim_e_ignora_sidecar(tmp_path):
     assert not s.ok
     again = convert_tree("pdet", raiz, lake=tmp_path / "lake")
     assert (again.converted, again.skipped) == (0, 1)
+
+
+# --- consumo do lake Hive pelos descritores -----------------------------------------
+
+
+def test_connect_lake_le_o_hive_com_apelido_e_tipos_do_descritor(tmp_path, write_hive):
+    from quantilica_sql.lake.duck import connect_lake
+
+    lake = tmp_path / "lake"
+    write_hive(
+        lake,
+        "tesouro-direto",
+        "investidores-do-tesouro-direto",
+        "Codigo do Investidor;UF\n1;SP\n",
+        key="inv-2018",
+        partition="2018",
+        alias="investidores",
+        partition_types={"periodo": "int"},
+    )
+    write_hive(
+        lake,
+        "tesouro-direto",
+        "investidores-do-tesouro-direto",
+        "Codigo do Investidor;UF\n2;RJ\n",
+        key="inv-2019",
+        partition="2019",
+        alias="investidores",
+        partition_types={"periodo": "int"},
+    )
+    duck = connect_lake(lake)
+    rows = duck.execute(
+        "SELECT periodo, codigo_do_investidor, _arquivo "
+        "FROM tesouro_direto.investidores ORDER BY 1"
+    ).fetchall()
+    assert rows == [(2018, "1", "inv-2018.parquet"), (2019, "2", "inv-2019.parquet")]
+    described = duck.execute(
+        "DESCRIBE SELECT periodo FROM tesouro_direto.investidores"
+    ).fetchall()
+    tipos = {r[0]: r[1] for r in described}
+    assert tipos == {"periodo": "BIGINT"}
+
+
+def test_connect_lake_mantem_zero_a_esquerda_da_particao_varchar(tmp_path, write_hive):
+    from quantilica_sql.lake.duck import connect_lake
+
+    lake = tmp_path / "lake"
+    write_hive(
+        lake,
+        "pdet",
+        "caged",
+        "a;b\n1;2\n",
+        key="caged_202601",
+        partition="01",
+        partition_key="mes",
+        partition_types={"mes": "str"},
+    )
+    duck = connect_lake(lake)
+    assert duck.execute("SELECT mes FROM pdet.caged").fetchall() == [("01",)]
+
+
+def test_connect_lake_sem_descritor_usa_o_nome_do_dataset_normalizado(
+    tmp_path, write_hive
+):
+    from quantilica_sql.lake.duck import connect_lake
+
+    lake = tmp_path / "lake"
+    write_hive(
+        lake,
+        "rfb-cnpj",
+        "dados-abertos",
+        "a;b\n1;2\n",
+        key="x",
+        partition="2026-09",
+        descriptor=False,
+    )
+    duck = connect_lake(lake)
+    assert duck.execute(
+        "SELECT a, b, periodo FROM rfb_cnpj.dados_abertos"
+    ).fetchall() == [("1", "2", "2026-09")]
+
+
+def test_connect_lake_rejeita_descritor_invalido(tmp_path, write_hive):
+    from quantilica_sql.lake.convert import LakeError
+    from quantilica_sql.lake.duck import connect_lake
+
+    lake = tmp_path / "lake"
+    out = write_hive(lake, "pdet", "caged", "a\n1\n", key="x", partition="2026")
+    (out.parent.parent / "_dataset.json").write_text("{ não é json")
+    with pytest.raises(LakeError, match="_dataset.json inválido"):
+        connect_lake(lake)
+
+
+# --- `lake convert` delega ao conversor do entry point ------------------------------
+
+
+class _FakeConverter:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def convert(self, input_dir, lake_dir, *, datasets=None, force=False):
+        self.calls.append((input_dir, lake_dir, datasets, force))
+        return self.result
+
+
+class _Result:
+    def __init__(self, converted=0, skipped=0, errors=()):
+        self.converted, self.skipped, self.errors = converted, skipped, list(errors)
+
+
+def _convert_cli(monkeypatch, converter, *args):
+    from typer.testing import CliRunner
+
+    from quantilica_sql.cli import app
+
+    monkeypatch.setattr(
+        "quantilica.core.lake.load_lake_converter", lambda source: converter
+    )
+    return CliRunner().invoke(app, ["lake", "convert", *args])
+
+
+def test_lake_convert_delega_ao_conversor_e_resume(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    fake = _FakeConverter(_Result(converted=2, skipped=1))
+    res = _convert_cli(
+        monkeypatch,
+        fake,
+        "tesouro-direto",
+        "-s",
+        str(raw),
+        "--lake",
+        str(tmp_path / "lake"),
+        "--dataset",
+        "investidores",
+        "--force",
+    )
+    assert res.exit_code == 0, res.output
+    assert fake.calls == [(raw, tmp_path / "lake", ["investidores"], True)]
+    assert "convertidos" in res.output and "2" in res.output
+
+
+def test_lake_convert_sem_dataset_converte_todos(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    fake = _FakeConverter(_Result())
+    res = _convert_cli(
+        monkeypatch, fake, "pdet", "-s", str(raw), "--lake", str(tmp_path / "l")
+    )
+    assert res.exit_code == 0, res.output
+    assert fake.calls == [(raw, tmp_path / "l", None, False)]
+
+
+def test_lake_convert_com_erros_sai_com_codigo_1(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    fake = _FakeConverter(_Result(converted=1, errors=["arquivo [x] corrompido"]))
+    res = _convert_cli(
+        monkeypatch, fake, "pdet", "-s", str(raw), "--lake", str(tmp_path / "l")
+    )
+    assert res.exit_code == 1
+    assert "arquivo [x] corrompido" in res.output
+
+
+def test_lake_convert_sem_conversor_instalado_orienta_a_instalar(tmp_path, monkeypatch):
+    res = _convert_cli(monkeypatch, None, "fonte-x", "-s", str(tmp_path))
+    assert res.exit_code == 1
+    saida = " ".join(res.output.split())  # o Rich quebra linhas em 80 colunas
+    assert "Fonte sem conversor instalado" in saida
+    assert "quantilica install fonte-x --extra analysis" in saida
+
+
+def test_lake_convert_pasta_de_origem_inexistente(tmp_path, monkeypatch):
+    fake = _FakeConverter(_Result())
+    res = _convert_cli(monkeypatch, fake, "pdet", "-s", str(tmp_path / "nao-existe"))
+    assert res.exit_code == 1
+    assert not fake.calls

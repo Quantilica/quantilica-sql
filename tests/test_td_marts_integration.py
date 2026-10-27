@@ -14,7 +14,6 @@ import pytest
 
 pytest.importorskip("duckdb")
 
-from quantilica_sql.lake import convert_file, get_spec  # noqa: E402
 from quantilica_sql.transform_runner import TransformRunner  # noqa: E402
 
 URL = os.environ.get("QUANTILICA_TEST_DATABASE_URL")
@@ -53,18 +52,40 @@ OPS_2019 = (
 
 
 @pytest.fixture
-def lake(tmp_path) -> Path:
+def lake(tmp_path, write_hive) -> Path:
     raiz = tmp_path / "lake"
-    inv = get_spec("tesouro-direto", "investidores-do-tesouro-direto")
-    ops = get_spec("tesouro-direto", "operacoes-do-tesouro-direto")
-    for nome, spec, texto in (
-        ("investidores-do-tesouro-direto-de-2018@20261007T000000.csv", inv, INV_2018),
-        ("investidores-do-tesouro-direto-de-2019@20261007T000000.csv", inv, INV_2019),
-        ("operacoes-do-tesouro-direto-de-2019@20261006T000000.csv", ops, OPS_2019),
+    for dataset, alias, chave, periodo, texto in (
+        (
+            "investidores-do-tesouro-direto",
+            "investidores",
+            "investidores-do-tesouro-direto-de-2018",
+            "2018",
+            INV_2018,
+        ),
+        (
+            "investidores-do-tesouro-direto",
+            "investidores",
+            "investidores-do-tesouro-direto-de-2019",
+            "2019",
+            INV_2019,
+        ),
+        (
+            "operacoes-do-tesouro-direto",
+            "operacoes",
+            "operacoes-do-tesouro-direto-de-2019",
+            "2019",
+            OPS_2019,
+        ),
     ):
-        arq = tmp_path / nome
-        arq.write_text(texto, encoding="utf-8")
-        convert_file(spec, arq, lake=raiz)
+        write_hive(
+            raiz,
+            "tesouro-direto",
+            dataset,
+            texto,
+            key=chave,
+            partition=periodo,
+            alias=alias,
+        )
     return raiz
 
 
