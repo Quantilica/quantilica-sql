@@ -1,35 +1,22 @@
-"""Lake de Parquet para microdados que não vivem no PostgreSQL.
+"""DuckDB sobre o lake: views por dataset e carga do resultado no Postgres.
 
 Requer o extra ``lake`` (``duckdb``).
 """
 
-from quantilica_sql.lake.convert import (
-    ConvertResult,
-    ConvertSummary,
+from quantilica_sql.lake.duck import (
     LakeError,
-    convert_file,
-    convert_tree,
-    file_key,
+    connect_lake,
     lake_root,
-    origin_matches,
-    output_path,
-    partition_of,
+    load_query_into_table,
+    normalize_name,
+    pg_type,
 )
-from quantilica_sql.lake.specs import DatasetSpec, get_spec, normalize_name, sources
 
 __all__ = [
-    "ConvertResult",
-    "ConvertSummary",
-    "DatasetSpec",
     "LakeError",
-    "convert_file",
-    "convert_tree",
-    "file_key",
-    "get_spec",
+    "connect_lake",
     "lake_root",
+    "load_query_into_table",
     "normalize_name",
-    "origin_matches",
-    "output_path",
-    "partition_of",
-    "sources",
+    "pg_type",
 ]

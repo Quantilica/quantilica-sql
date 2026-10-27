@@ -10,11 +10,37 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
-from quantilica.core.lake import DESCRIPTOR_FILENAME, DatasetDescriptor
+from quantilica.core.lake import (
+    DESCRIPTOR_FILENAME,
+    DatasetDescriptor,
+)
+from quantilica.core.lake import (
+    lake_root as _core_lake_root,
+)
 
 from quantilica_sql.config import get_settings
-from quantilica_sql.lake.convert import LakeError, _lit, lake_root
-from quantilica_sql.lake.specs import normalize_name
+
+
+class LakeError(Exception):
+    """Erro de operação no lake."""
+
+
+def lake_root(lake: Path | None = None) -> Path:
+    """Resolve a raiz do lake, aceitando sobrescrita explícita."""
+    if lake is not None:
+        return Path(lake).expanduser()
+    return _core_lake_root()
+
+
+def _lit(text: str) -> str:
+    """Escapa literal SQL para DuckDB."""
+    return "'" + str(text).replace("'", "''") + "'"
+
+
+def normalize_name(name: str) -> str:
+    """Normaliza nome de fonte ou dataset para identificador SQL."""
+    return name.replace("-", "_")
+
 
 _NULL = "\\N"
 
@@ -66,12 +92,23 @@ _HIVE_TYPES = {
 }
 
 
-def _hive_types(partition_types: dict[str, str]) -> str:
-    """``hive_types = {...}`` a partir de ``partition_types`` do descritor."""
-    items = ", ".join(
-        f"{_lit(key)}: {_lit(_HIVE_TYPES.get(t.strip().lower(), t.strip().upper()))}"
-        for key, t in partition_types.items()
-    )
+def _hive_types(
+    partition_types: dict[str, str] | None,
+    partition_keys: list[str] | None = None,
+) -> str:
+    """``hive_types = {...}`` a partir de ``partition_types`` e ``partition_keys``.
+
+    Chaves não tipadas no descritor assumem VARCHAR por padrão para preservar
+    zeros à esquerda e strings de particionamento.
+    """
+    types: dict[str, str] = {}
+    if partition_keys:
+        for k in partition_keys:
+            types[k] = "VARCHAR"
+    if partition_types:
+        for key, t in partition_types.items():
+            types[key] = _HIVE_TYPES.get(t.strip().lower(), t.strip().upper())
+    items = ", ".join(f"{_lit(key)}: {_lit(t)}" for key, t in types.items())
     return f"hive_types = {{{items}}}"
 
 
@@ -128,8 +165,13 @@ def connect_lake(lake: Path | None = None):
                 "union_by_name=true",
                 "filename=true",
             ]
-            if descriptor and descriptor.partition_types:
-                options.append(_hive_types(descriptor.partition_types))
+            if descriptor and (descriptor.partition_types or descriptor.partition_keys):
+                options.append(
+                    _hive_types(
+                        descriptor.partition_types,
+                        descriptor.partition_keys,
+                    )
+                )
             conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
             conn.execute(
                 f'CREATE OR REPLACE VIEW "{schema}"."{view}" AS '

@@ -17,7 +17,28 @@ def write_hive(tmp_path):
     duckdb = pytest.importorskip("duckdb")
     from quantilica.core.lake import DatasetDescriptor
 
-    from quantilica_sql.lake.specs import normalize_name, unique_names
+    import re
+    import unicodedata
+
+    def normalize_name(name: str) -> str:
+        s = (
+            unicodedata.normalize("NFKD", name)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        return re.sub(r"[^a-zA-Z0-9]+", "_", s.strip().lower()).strip("_")
+
+    def unique_names(names: list[str]) -> list[str]:
+        seen: dict[str, int] = {}
+        res = []
+        for n in names:
+            if n in seen:
+                seen[n] += 1
+                res.append(f"{n}_{seen[n]}")
+            else:
+                seen[n] = 1
+                res.append(n)
+        return res
 
     def write(
         lake: Path,
