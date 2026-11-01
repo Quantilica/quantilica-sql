@@ -17,10 +17,15 @@ class PluginManager:
 
     def __init__(self, plugins_dir: Path | None = None) -> None:
         self.plugins_dir = plugins_dir or get_settings().plugins_dir
-        self.plugins_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.plugins_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 
     def list_plugins(self) -> list[dict[str, str]]:
         """Lista os catálogos de pipelines instalados."""
+        if not self.plugins_dir.is_dir():
+            return []
         plugins = []
         for p in self.plugins_dir.iterdir():
             if p.is_dir() and (p / "manifest.toml").exists():
