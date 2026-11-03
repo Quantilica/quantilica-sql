@@ -122,6 +122,53 @@ def _load_descriptor(dataset_dir: Path) -> DatasetDescriptor | None:
         raise LakeError(f"{dataset_dir / DESCRIPTOR_FILENAME} inválido: {exc}") from exc
 
 
+DUCKDB_MEMORY_ENV = "QUANTILICA_DUCKDB_MEMORY"
+DUCKDB_THREADS_ENV = "QUANTILICA_DUCKDB_THREADS"
+_MEMORY_RE = re.compile(
+    r"^\d+(\.\d+)?\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB|%)$", re.IGNORECASE
+)
+
+
+def duckdb_env_settings(
+    environ: os._Environ[str] | dict[str, str] | None = None,
+) -> tuple[str | None, int | None]:
+    """``(memory_limit, threads)`` a partir de ``QUANTILICA_DUCKDB_MEMORY/THREADS``.
+
+    Variável ausente ou vazia vira ``None`` (o DuckDB mantém o padrão). Valor
+    inválido levanta :class:`LakeError` (``64GB``, ``512MiB``, ``80%``; threads
+    inteiro >= 1), em vez de deixar um ``ValueError``/erro cru do DuckDB subir.
+    """
+    env = os.environ if environ is None else environ
+    memory = (env.get(DUCKDB_MEMORY_ENV) or "").strip() or None
+    if memory is not None and not _MEMORY_RE.match(memory):
+        raise LakeError(
+            f"{DUCKDB_MEMORY_ENV}={memory!r} inválido: use tamanho com unidade "
+            "(ex.: 64GB, 512MiB, 80%)"
+        )
+    raw_threads = (env.get(DUCKDB_THREADS_ENV) or "").strip()
+    threads: int | None = None
+    if raw_threads:
+        if not raw_threads.isdigit() or int(raw_threads) < 1:
+            raise LakeError(
+                f"{DUCKDB_THREADS_ENV}={raw_threads!r} inválido: use inteiro >= 1"
+            )
+        threads = int(raw_threads)
+    return memory, threads
+
+
+def apply_env_settings(conn: Any) -> None:
+    """Aplica ``memory_limit``/``threads`` das variáveis de ambiente à conexão.
+
+    Sem as variáveis, não altera nada (defaults do DuckDB). É o leitor das
+    variáveis exportadas por ``infra/lake-marts.sh``.
+    """
+    memory, threads = duckdb_env_settings()
+    if memory is not None:
+        conn.execute(f"SET memory_limit = {_lit(memory)}")
+    if threads is not None:
+        conn.execute(f"SET threads = {threads}")
+
+
 def connect_lake(lake: Path | None = None):
     """Conexão DuckDB em memória com uma view por dataset: ``<fonte>.<dataset>``.
 
@@ -139,12 +186,7 @@ def connect_lake(lake: Path | None = None):
     tmp = root / ".tmp"
     tmp.mkdir(parents=True, exist_ok=True)
     conn.execute(f"SET temp_directory = {_lit(str(tmp))}")
-    memory = os.environ.get("QUANTILICA_DUCKDB_MEMORY")
-    if memory:
-        conn.execute(f"SET memory_limit = {_lit(memory)}")
-    threads = os.environ.get("QUANTILICA_DUCKDB_THREADS")
-    if threads:
-        conn.execute(f"SET threads = {int(threads)}")
+    apply_env_settings(conn)
 
     if not root.exists():
         return conn
