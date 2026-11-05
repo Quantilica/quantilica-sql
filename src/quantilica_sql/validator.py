@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import tomllib
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -65,6 +66,53 @@ def _load_toml(path: Path, report: ValidationReport) -> dict[str, Any] | None:
         report.error("arquivo não encontrado", path)
     except tomllib.TOMLDecodeError as exc:
         report.error(f"TOML inválido: {exc}", path)
+    return None
+
+
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_LINE_COMMENT = re.compile(r"--[^\n]*")
+_STRING = re.compile(r"'(?:[^']|'')*'")
+# ``FROM|JOIN schema.nome`` que não é chamada de função (``schema.f(``).
+_TABLE_REF = re.compile(
+    r"\b(?:FROM|JOIN)\s+([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b(?!\s*\()", re.IGNORECASE
+)
+ALIASES_FILENAMES = ("lake_aliases.toml", "tests/lake_aliases.toml")
+
+
+def extract_table_refs(sql: str) -> set[str]:
+    """Referências ``schema.nome`` após FROM/JOIN, em minúsculas.
+
+    Comentários e literais de texto são ignorados (podem conter FROM soltos).
+    """
+    text = _BLOCK_COMMENT.sub(" ", sql)
+    text = _LINE_COMMENT.sub(" ", text)
+    text = _STRING.sub("''", text)
+    return {f"{a}.{b}".lower() for a, b in _TABLE_REF.findall(text)}
+
+
+def load_lake_views(root: Path) -> set[str] | None:
+    """Views ``fonte.alias`` do lake declaradas em ``lake_aliases.toml``.
+
+    Procura em ``root`` e em ``root/tests``. Sem o arquivo devolve ``None`` (as
+    referências ao lake não são conferidas). Formato: ``[sources.<fonte>]`` com
+    ``aliases`` e, opcionalmente, ``legacy_aliases``.
+    """
+    for rel in ALIASES_FILENAMES:
+        path = root / rel
+        if path.is_file():
+            try:
+                with open(path, "rb") as f:
+                    data = tomllib.load(f)
+            except tomllib.TOMLDecodeError:
+                return None
+            views: set[str] = set()
+            for source, info in (data.get("sources") or {}).items():
+                if not isinstance(info, dict):
+                    continue
+                for key in ("aliases", "legacy_aliases"):
+                    for alias in info.get(key, []):
+                        views.add(f"{source}.{alias}".lower())
+            return views
     return None
 
 
@@ -379,7 +427,79 @@ class PipelineValidator:
             }
         ):
             report.extend(self.validate_pipeline_dir(d))
+        report.extend(self.validate_sql_references(root))
         return report
+
+    # -- referências dentro do SQL -------------------------------------------
+
+    def validate_sql_references(self, root: Path) -> ValidationReport:
+        """Confere as tabelas/views lidas pelo SQL de cada ``[[table]]``.
+
+        * ``engine = "duckdb"``: toda ``fonte.alias`` lida precisa ser uma view do
+          lake listada em ``lake_aliases.toml`` (conferida só se o arquivo existe).
+        * ``engine = "postgres"`` não é conferido: as tabelas lidas podem vir do
+          banco (carga bruta, ``fetch.toml``), que o validador não enxerga.
+        """
+        report = ValidationReport()
+        entries: list[tuple[Path, dict[str, Any]]] = []
+        for transform in sorted(root.rglob("transform.toml")):
+            try:
+                with open(transform, "rb") as f:
+                    data = tomllib.load(f)
+            except (OSError, tomllib.TOMLDecodeError):
+                continue  # já reportado por validate_transform
+            tables = data.get("table")
+            if isinstance(tables, list):
+                entries.extend((transform, t) for t in tables if isinstance(t, dict))
+        declared = {
+            f"{t['schema']}.{t['name']}".lower()
+            for _, t in entries
+            if isinstance(t.get("schema"), str) and isinstance(t.get("name"), str)
+        }
+        lake_views = load_lake_views(root)
+        default_engines = _default_engines(root)
+
+        for transform, t in entries:
+            sql_rel = t.get("sql")
+            if (
+                not isinstance(sql_rel, str)
+                or not (transform.parent / sql_rel).is_file()
+            ):
+                continue  # já reportado
+            engine = t.get("engine") or default_engines.get(
+                transform.parent.resolve(), "postgres"
+            )
+            refs = extract_table_refs(
+                (transform.parent / sql_rel).read_text(encoding="utf-8")
+            )
+            if engine == "duckdb":
+                if lake_views is None:
+                    continue
+                for ref in sorted(refs - lake_views - declared):
+                    report.error(
+                        f"{sql_rel}: view {ref!r} não existe no lake "
+                        "(confira o alias em lake_aliases.toml)",
+                        transform,
+                    )
+        return report
+
+
+def _default_engines(root: Path) -> dict[Path, str]:
+    """``engine`` do manifest por diretório de pipeline (herdado por subdiretórios)."""
+    try:
+        with open(root / "manifest.toml", "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    entries = list(data.get("pipelines", {}).values()) + list(data.get("pipeline", []))
+    result: dict[Path, str] = {}
+    for e in entries:
+        if isinstance(e, dict) and isinstance(e.get("path"), str) and e.get("engine"):
+            base = (root / e["path"]).resolve()
+            result[base] = e["engine"]
+            for sub in base.rglob("transform.toml"):
+                result.setdefault(sub.parent.resolve(), e["engine"])
+    return result
 
 
 def _dirs_fora_do_manifest(root: Path, manifest: Path) -> list[Path]:

@@ -5,6 +5,11 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não publicado]
+
+### Adicionado
+- `quantilica sql validate` confere as referências dentro do SQL: em `engine = "duckdb"`, toda view `fonte.alias` lida precisa constar em `lake_aliases.toml` (na raiz do catálogo ou em `tests/`). Referência inexistente vira erro. Sem `lake_aliases.toml` as views do lake não são conferidas, e o `engine = "postgres"` não é conferido (as tabelas podem vir da carga bruta).
+
 ## [0.2.0] - 2026-10-27
 
 ### Adicionado
