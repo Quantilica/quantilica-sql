@@ -7,6 +7,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não publicado]
 
+## [0.3.0] - 2026-11-14
+
+### Corrigido
+- `ensure_schema` e o `TransformRunner` só executam `CREATE SCHEMA` quando o schema não existe (`pg_namespace`). `CREATE SCHEMA IF NOT EXISTS` exige o privilégio `CREATE` no banco mesmo com o schema existente, e o papel da aplicação em produção não o tem: os marts do Tesouro Direto falhavam com *permission denied* ao publicar.
+
 ### Adicionado
 - `quantilica sql validate` confere as referências dentro do SQL: em `engine = "duckdb"`, toda view `fonte.alias` lida precisa constar em `lake_aliases.toml` (na raiz do catálogo ou em `tests/`). Referência inexistente vira erro. Sem `lake_aliases.toml` as views do lake não são conferidas, e o `engine = "postgres"` não é conferido (as tabelas podem vir da carga bruta).
 
