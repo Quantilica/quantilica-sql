@@ -45,13 +45,28 @@ def get_connection(
     return psycopg.connect(url, autocommit=autocommit)
 
 
+def create_schema_if_missing(cur: psycopg.Cursor, schema_name: str) -> None:
+    """Cria o schema só se ele não existe.
+
+    ``CREATE SCHEMA IF NOT EXISTS`` exige o privilégio ``CREATE`` no banco mesmo
+    quando o schema já existe; o papel da aplicação em produção não o tem (é dono
+    dos schemas, mas não cria novos). Consultar antes evita a falha nesse caso.
+    """
+    cur.execute(
+        sql.SQL("SELECT 1 FROM pg_namespace WHERE nspname = %s"), (schema_name,)
+    )
+    if cur.fetchone() is None:
+        cur.execute(
+            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+                sql.Identifier(schema_name)
+            )
+        )
+
+
 def ensure_schema(conn: psycopg.Connection, schema_name: str) -> None:
     """Garante que o schema existe no banco usando identificador seguro."""
-    query = sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
-        sql.Identifier(schema_name)
-    )
     with conn.cursor() as cur:
-        cur.execute(query)
+        create_schema_if_missing(cur, schema_name)
     commit_if_standalone(conn)
 
 

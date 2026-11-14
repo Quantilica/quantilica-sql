@@ -178,6 +178,8 @@ class FakeCursor:
         self.conn.log.append(text)
 
     def fetchone(self):
+        if self.conn.log and "pg_namespace" in self.conn.log[-1]:
+            return None  # o schema de destino ainda não existe: é criado
         return (None,)  # to_regclass: o destino ainda não existe
 
     def fetchall(self):
@@ -243,6 +245,7 @@ def test_replace_sequence(tmp_path):
     assert done == ["analytics.t"]
     assert conn.log == [
         "BEGIN",
+        "SELECT 1 FROM pg_namespace WHERE nspname = %s",
         'CREATE SCHEMA IF NOT EXISTS "analytics"',
         'SET LOCAL search_path TO "ibge_sidra", public',
         'DROP TABLE IF EXISTS "analytics"."t__new"',
@@ -270,6 +273,7 @@ def test_view_sequence_and_no_search_path_when_unset(tmp_path):
     TransformRunner().run_transform_toml(conn, toml)
     assert conn.log == [
         "BEGIN",
+        "SELECT 1 FROM pg_namespace WHERE nspname = %s",
         'CREATE SCHEMA IF NOT EXISTS "analytics"',
         'DROP VIEW IF EXISTS "analytics"."v"',
         'CREATE VIEW "analytics"."v" AS select 1',

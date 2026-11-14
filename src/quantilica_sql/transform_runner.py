@@ -11,6 +11,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
+from quantilica_sql.database import create_schema_if_missing
 from quantilica_sql.validator import PipelineValidator
 
 logger = logging.getLogger("quantilica_sql.transform_runner")
@@ -235,11 +236,7 @@ class TransformRunner:
         )
         # Bloco transacional por entrada: rollback isola falhas.
         with conn.transaction(), conn.cursor() as cur:
-            cur.execute(
-                sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
-                    sql.Identifier(spec.schema)
-                )
-            )
+            create_schema_if_missing(cur, spec.schema)
             if self.raw_schema:
                 # Num ensaio lateral (target_schema) as tabelas já geradas pelo próprio
                 # pipeline precisam resolver antes das do schema de origem.

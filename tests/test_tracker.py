@@ -17,6 +17,7 @@ def _setup_mock_conn(autocommit: bool = False) -> tuple[MagicMock, MagicMock]:
     mock_conn = MagicMock()
     mock_conn.autocommit = autocommit
     mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = None  # schema ainda não existe
     mock_conn.cursor.return_value.__enter__.return_value = mock_cur
     return mock_conn, mock_cur
 
