@@ -196,6 +196,26 @@ def test_scratch_inside_the_source_is_a_clear_error(
     assert not seen
 
 
+def test_other_value_error_is_not_reported_as_overlap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quantilica_sql.vigente import ViewUnavailableError, vigente_view
+
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("QUANTILICA_LAKE_SCRATCH", str(scratch))
+    pasta = _source(tmp_path, TWO_VERSIONS)
+
+    def boom(*_args, **_kwargs):
+        raise ValueError("outra causa")
+
+    monkeypatch.setattr("quantilica_sql.vigente.materialize_view", boom)
+    with pytest.raises(ValueError, match="outra causa") as info:
+        with vigente_view(pasta):
+            raise AssertionError("não deveria montar")
+    assert not isinstance(info.value, ViewUnavailableError)
+    assert list(scratch.iterdir()) == []
+
+
 def test_selects_versions_follows_partial_and_wrapped() -> None:
     import functools
 
