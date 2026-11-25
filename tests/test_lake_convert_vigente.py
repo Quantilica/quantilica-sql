@@ -149,3 +149,70 @@ def test_converter_error_cleans_the_view(
     assert result.exit_code != 0
     assert seen and not seen[0]["input"].exists()
     assert list(scratch.iterdir()) == []
+
+
+def test_orphan_views_with_the_dotted_prefix_are_removed_too(
+    tmp_path: Path, scratch: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O prefixo atual começa com ponto; o antigo (sem ponto) segue aceito."""
+    import json
+    import socket
+
+    from quantilica_sql import vigente
+
+    scratch.mkdir()
+    orfa = scratch / ".quantilica-vigente-orfa"
+    orfa.mkdir()
+    (orfa / "owner.json").write_text(
+        json.dumps({"pid": 999999, "hostname": socket.gethostname()})
+    )
+    monkeypatch.setattr(vigente, "_pid_alive", lambda pid: False)
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    _install(monkeypatch, [])
+    assert _run(pasta, tmp_path).exit_code == 0
+    assert list(scratch.iterdir()) == []
+
+
+def test_view_folder_name_starts_with_a_dot(tmp_path: Path, scratch: Path) -> None:
+    from quantilica_sql.vigente import vigente_view
+
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    with vigente_view(pasta) as (view, _):
+        assert view.parent.parent.name.startswith(".quantilica-vigente-")
+
+
+def test_scratch_inside_the_source_is_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    monkeypatch.setenv("QUANTILICA_LAKE_SCRATCH", str(pasta / "scratch"))
+    seen: list[dict] = []
+    _install(monkeypatch, seen)
+    result = _run(pasta, tmp_path)
+    assert result.exit_code == 1
+    text = " ".join(result.output.split())
+    assert "fora da pasta do bruto" in text
+    assert "mesmo volume do bruto" in text
+    assert not seen
+
+
+def test_selects_versions_follows_partial_and_wrapped() -> None:
+    import functools
+
+    from quantilica_sql.vigente import converter_selects_versions
+
+    def declared(input_dir, lake_dir) -> None: ...
+
+    declared.selects_versions = True  # type: ignore[attr-defined]
+
+    def silent(input_dir, lake_dir) -> None: ...
+
+    assert converter_selects_versions(functools.partial(declared, 1))
+    assert not converter_selects_versions(functools.partial(silent, 1))
+
+    @functools.wraps(declared)
+    def wrapper(*args, **kwargs):
+        return declared(*args, **kwargs)
+
+    del wrapper.selects_versions  # wraps copia __dict__: força o caminho __wrapped__
+    assert converter_selects_versions(wrapper)
