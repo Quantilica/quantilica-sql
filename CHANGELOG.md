@@ -8,6 +8,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [Não publicado]
 
 ### Corrigido
+- `quantilica sql lake convert` não entrega mais ao conversor todas as versões carimbadas do mesmo arquivo bruto (`nome@AAAAMMDD.ext`). Quando a pasta da fonte tem mais de uma versão de algum arquivo, o conversor recebe uma visão temporária só com a vigente (escolha de `quantilica.core.lake.select_current`, montada por `materialize_view` com links, sem copiar dados), removida ao final, também em erro. Fica em `QUANTILICA_LAKE_SCRATCH` ou, sem a variável, no diretório temporário do sistema (`TMPDIR`). Sem arquivo com mais de uma versão, o conversor recebe a pasta original. Novo módulo `quantilica_sql.vigente`. Exige `quantilica-core>=0.15.0`.
 - CI: o `uv sync` do workflow de testes deixa de passar `--index` e `--index-strategy` do índice Quantilica. O pacote não depende de nada que só exista no índice, e o GitHub Pages responde com 503 intermitente quando o caminho não existe, o que derrubava o job.
 
 ## [0.3.0] - 2026-11-14
