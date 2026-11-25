@@ -34,7 +34,12 @@ def _source(tmp_path: Path, names: list[str]) -> Path:
     return pasta
 
 
-def _install(monkeypatch: pytest.MonkeyPatch, seen: list[dict], fail: bool = False):
+def _install(
+    monkeypatch: pytest.MonkeyPatch,
+    seen: list[dict],
+    fail: bool = False,
+    selects_versions: bool | None = None,
+):
     class Conversor:
         def convert(self, input_dir, lake_dir, *, datasets=None, force=False):
             seen.append({"input": Path(input_dir), "files": _files(Path(input_dir))})
@@ -42,6 +47,8 @@ def _install(monkeypatch: pytest.MonkeyPatch, seen: list[dict], fail: bool = Fal
                 raise ValueError("falhou")
             return type("R", (), {"converted": 1, "skipped": 0, "errors": []})()
 
+    if selects_versions is not None:
+        Conversor.selects_versions = selects_versions  # type: ignore[attr-defined]
     monkeypatch.setattr(
         "quantilica.core.lake.load_lake_converter", lambda source: Conversor()
     )
@@ -67,6 +74,59 @@ def test_converter_sees_only_the_current_version(
     assert all(s["input"] != pasta for s in seen)
     assert list(scratch.iterdir()) == []
     assert _files(pasta) == sorted(TWO_VERSIONS)  # bruto intacto
+
+
+def test_converter_that_selects_its_own_versions_gets_the_original_folder(
+    tmp_path: Path, scratch: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    seen: list[dict] = []
+    _install(monkeypatch, seen, selects_versions=True)
+    result = _run(pasta, tmp_path)
+    assert result.exit_code == 0, result.output
+    assert seen[0]["input"] == pasta
+    assert seen[0]["files"] == sorted(TWO_VERSIONS)
+    assert not scratch.exists() or list(scratch.iterdir()) == []
+
+
+def test_refuses_to_copy_when_links_are_not_possible(
+    tmp_path: Path, scratch: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    seen: list[dict] = []
+    _install(monkeypatch, seen)
+
+    def no_link(*_args: object, **_kwargs: object) -> None:
+        raise OSError("sem link")
+
+    monkeypatch.setattr("os.link", no_link)
+    monkeypatch.setattr("os.symlink", no_link)
+    result = _run(pasta, tmp_path)
+    assert result.exit_code == 1
+    assert "lake select" in " ".join(result.output.split())
+    assert not seen
+    assert list(scratch.iterdir()) == []
+
+
+def test_orphan_views_are_removed_on_the_next_run(
+    tmp_path: Path, scratch: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+    import socket
+
+    from quantilica_sql import vigente
+
+    scratch.mkdir()
+    orfa = scratch / "quantilica-vigente-orfa"
+    orfa.mkdir()
+    (orfa / "owner.json").write_text(
+        json.dumps({"pid": 999999, "hostname": socket.gethostname()})
+    )
+    monkeypatch.setattr(vigente, "_pid_alive", lambda pid: False)
+    pasta = _source(tmp_path, TWO_VERSIONS)
+    _install(monkeypatch, [])
+    assert _run(pasta, tmp_path).exit_code == 0
+    assert list(scratch.iterdir()) == []
 
 
 def test_single_version_keeps_the_original_folder(

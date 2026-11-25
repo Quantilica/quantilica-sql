@@ -19,7 +19,11 @@ from quantilica_sql.plugin_manager import PluginManager
 from quantilica_sql.runner import run_pipeline
 from quantilica_sql.scaffold import scaffold_catalog, scaffold_pipeline
 from quantilica_sql.validator import PipelineValidator
-from quantilica_sql.vigente import vigente_view
+from quantilica_sql.vigente import (
+    ViewUnavailableError,
+    converter_selects_versions,
+    vigente_view,
+)
 
 app = typer.Typer(
     name="sql",
@@ -290,8 +294,12 @@ def cmd_lake_convert(
     target = lake_root(lake)
     try:
         # O conversor lê só a versão vigente de cada arquivo bruto, nunca todas
-        # as versões carimbadas da pasta.
-        with vigente_view(root) as (entrada, ignorados):
+        # as versões carimbadas da pasta; quem escolhe a vigente por conta própria
+        # (``selects_versions = True``) recebe a pasta original.
+        with vigente_view(root, skip=converter_selects_versions(converter)) as (
+            entrada,
+            ignorados,
+        ):
             if ignorados:
                 console.print(
                     f"[dim]Bruto com versões antigas: {ignorados} arquivo(s) fora "
@@ -303,6 +311,9 @@ def cmd_lake_convert(
                 datasets=[dataset] if dataset else None,
                 force=force,
             )
+    except ViewUnavailableError as exc:
+        console.print(f"[red]Erro:[/red] {escape(str(exc))}")
+        raise typer.Exit(code=1) from None
     except ImportError as exc:
         console.print(
             f"[red]O conversor de {source} requer o extra 'analysis':[/red] "
