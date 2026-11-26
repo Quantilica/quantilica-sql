@@ -86,6 +86,9 @@ select = ["E", "F", "I", "UP", "B"]
 "src/quantilica_sql/cli.py" = ["B008"]
 # nomes longos de arquivos reais do bruto
 "tests/_sidra_fixtures.py" = ["E501"]
+# SQL de teste em linhas longas
+"tests/test_sidra_esquema.py" = ["E501"]
+"tests/test_sidra_carga.py" = ["E501"]
 
 [tool.uv]
 required-version = ">=0.9"

@@ -23,6 +23,8 @@ from quantilica_sql.core.tracker import (
 )
 from quantilica_sql.core.txscope import commit_if_standalone
 from quantilica_sql.database import ensure_schema
+from quantilica_sql.sidra.esquema import esquema_antigo
+from quantilica_sql.sidra.esquema import resumo as esquema_resumo
 
 logger = logging.getLogger("quantilica_sql.adapters.sidra")
 
@@ -106,49 +108,30 @@ class SidraAdapter(BaseSourceAdapter):
         return "ibge_sidra"
 
     def status(self, conn: psycopg.Connection) -> dict[str, Any]:
+        """Tabelas carregadas, versões, observações e ativas (esquema dimensional)."""
         ensure_schema(conn, self.schema)
         ensure_tracker_table(conn, self.schema)
         with conn.cursor() as cur:
-            query = sql.SQL(
-                """
-                SELECT count(*), coalesce(sum(linhas), 0) 
-                FROM {schema}.{table} 
-                WHERE dataset IN ('sidra', 'tabela_sidra');
-                """
-            ).format(
-                schema=sql.Identifier(self.schema),
-                table=sql.Identifier("arquivo_carregado"),
-            )
-            cur.execute(query)
-            res = cur.fetchone()
-            tables_count, total_rows = res if res else (0, 0)
-
             cur.execute(
-                """
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.tables 
-                    WHERE table_schema = %s AND table_name = 'dados'
-                );
-                """,
-                (self.schema,),
+                sql.SQL(
+                    "SELECT count(*), coalesce(sum(linhas), 0) FROM {} "
+                    "WHERE dataset = %s"
+                ).format(sql.Identifier(self.schema, "arquivo_carregado")),
+                (self.domain,),
             )
-            dados_exists = cur.fetchone()[0]
-            dados_rows = 0
-            if dados_exists:
-                cur.execute(
-                    sql.SQL("SELECT count(*) FROM {schema}.dados;").format(
-                        schema=sql.Identifier(self.schema)
-                    )
-                )
-                dados_rows = cur.fetchone()[0]
-
-            return {
-                "domain": self.domain,
-                "schema": self.schema,
-                "tabelas_carregadas": tables_count,
-                "linhas_totais": total_rows,
-                "dados_rows": dados_rows,
-            }
+            arquivos, linhas = cur.fetchone() or (0, 0)
+        res = esquema_resumo(conn, self.schema)
+        return {
+            "domain": self.domain,
+            "schema": self.schema,
+            "tabelas_carregadas": res["tabelas"],
+            "versoes": res["versoes"],
+            "observacoes": res["observacoes"],
+            "observacoes_ativas": res["observacoes_ativas"],
+            "arquivos_carregados": arquivos,
+            "linhas_totais": linhas,
+            "esquema_antigo": esquema_antigo(conn, self.schema),
+        }
 
     def _ensure_tables(self, conn: psycopg.Connection) -> None:
         """Garante a existência da tabela e índices de dados do SIDRA."""

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
+import uuid
 from pathlib import Path
 
 import pytest
@@ -82,3 +84,28 @@ def write_hive(tmp_path):
         return out
 
     return write
+
+
+@pytest.fixture
+def pg_url() -> str:
+    """URL do PostgreSQL descartável de teste (``QUANTILICA_TEST_DATABASE_URL``)."""
+    url = os.environ.get("QUANTILICA_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("QUANTILICA_TEST_DATABASE_URL ausente")
+    pytest.importorskip("psycopg")
+    return url
+
+
+@pytest.fixture
+def pg_schema(pg_url):
+    """Conexão (autocommit) e um schema próprio, removido ao final."""
+    import psycopg
+    from psycopg import sql
+
+    schema = f"qsql_t_{uuid.uuid4().hex[:8]}"
+    conn = psycopg.connect(pg_url, autocommit=True)
+    yield conn, schema
+    conn.execute(
+        sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema))
+    )
+    conn.close()
