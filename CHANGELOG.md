@@ -5,6 +5,12 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Corrigido
+- `quantilica sql load sidra -s <pasta> --all` carrega a pasta do bruto do `ibge-sidra` (a raiz com `t-<id>/` ou uma pasta `t-<id>`): só a versão vigente de cada consulta (`quantilica.core.lake.select_current`, carimbo `@AAAAMMDD` mais novo), sem `metadados@...`, `indice_pesquisas@...`, sidecars nem `*.tmp`, um arquivo por vez com seu registro no ledger. Antes o adaptador abria o caminho como arquivo e a pasta falhava com `IsADirectoryError`; o `--all` era ignorado. Pasta sem `--all` nem `--table <id>` sai com erro claro (em vez de carregar tudo ou nada); pasta sem arquivo de dados também. O id da tabela vem de `t-<id>` no nome do arquivo ou da pasta.
+- `ibge_sidra.dados.modificacao` passa a ser a data da fonte: o campo `modificacao` do item (se vier), senão a `metadata.modificacao` do sidecar `.manifest.json` do arquivo, senão o carimbo `@AAAAMMDD` do nome. Sem nenhuma (a API não informou: `0001-01-01` / `@00010101`), fica `NULL`. As respostas cruas do `/values` não trazem o campo e as linhas recebiam o valor fixo `2026-01-01`. A data de coleta (`fetched_at`, `metadados@...`) nunca entra. Data ilegível no item falha com erro claro. A coluna deixa de ser `NOT NULL DEFAULT CURRENT_DATE` (a data da carga não é a data da fonte); tabela criada antes é migrada na primeira carga (`DROP NOT NULL`, `DROP DEFAULT`).
+
 ## [0.3.1] - 2026-11-25
 
 ### Corrigido
