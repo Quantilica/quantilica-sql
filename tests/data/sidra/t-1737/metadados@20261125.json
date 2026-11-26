@@ -1,0 +1,121 @@
+{
+  "id": 1737,
+  "nome": "IPCA - Série histórica com número-índice, variação mensal e variações acumuladas em 3 meses, em 6 meses, no ano e em 12 meses (a partir de dezembro/1979)",
+  "url": "https://sidra.ibge.gov.br/tabela/1737",
+  "pesquisa": {
+    "id": "",
+    "nome": "Índice Nacional de Preços ao Consumidor Amplo"
+  },
+  "assunto": "Índices de preços",
+  "periodicidade": {
+    "frequencia": "mensal",
+    "inicio": 197912,
+    "fim": 202610
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 2266,
+      "nome": "IPCA - Número-índice (base: dezembro de 1993 = 100)",
+      "unidade": "Número-índice",
+      "sumarizacao": []
+    },
+    {
+      "id": 63,
+      "nome": "IPCA - Variação mensal",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 2263,
+      "nome": "IPCA - Variação acumulada em 3 meses",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 2264,
+      "nome": "IPCA - Variação acumulada em 6 meses",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 69,
+      "nome": "IPCA - Variação acumulada no ano",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 2265,
+      "nome": "IPCA - Variação acumulada em 12 meses",
+      "unidade": "%",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [],
+  "periodos": [
+    {
+      "id": "202608",
+      "literals": [
+        "agosto 2026",
+        "agosto de 2026"
+      ],
+      "modificacao": "2026-09-11",
+      "frequencia": "mensal",
+      "data_inicio": "2026-08-01",
+      "data_fim": "2026-08-31",
+      "ano": 2026,
+      "mes": 8,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202609",
+      "literals": [
+        "setembro 2026",
+        "setembro de 2026"
+      ],
+      "modificacao": "2026-10-09",
+      "frequencia": "mensal",
+      "data_inicio": "2026-09-01",
+      "data_fim": "2026-09-30",
+      "ano": 2026,
+      "mes": 9,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202610",
+      "literals": [
+        "outubro 2026",
+        "outubro de 2026"
+      ],
+      "modificacao": "2026-11-12",
+      "frequencia": "mensal",
+      "data_inicio": "2026-10-01",
+      "data_fim": "2026-10-31",
+      "ano": 2026,
+      "mes": 10,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1",
+      "nome": "Brasil",
+      "nivel": {
+        "id": "N1",
+        "nome": "Brasil"
+      }
+    }
+  ]
+}

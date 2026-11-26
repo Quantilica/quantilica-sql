@@ -1,0 +1,195 @@
+{
+  "id": 1086,
+  "nome": "Número de informantes e Quantidade de leite cru, resfriado ou não, adquirido e industrializado, e preço médio, no mês e no trimestre, por tipo de inspeção",
+  "url": "https://sidra.ibge.gov.br/tabela/1086",
+  "pesquisa": {
+    "id": "",
+    "nome": "Pesquisa Trimestral do Leite"
+  },
+  "assunto": "Leite",
+  "periodicidade": {
+    "frequencia": "trimestral",
+    "inicio": 199701,
+    "fim": 202602
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1",
+      "N3"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 151,
+      "nome": "Número de informantes",
+      "unidade": "Unidades",
+      "sumarizacao": [
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000151,
+      "nome": "Número de informantes - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 282,
+      "nome": "Quantidade de leite cru, resfriado ou não, adquirido",
+      "unidade": "Mil litros",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000282,
+      "nome": "Quantidade de leite cru, resfriado ou não, adquirido - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 283,
+      "nome": "Quantidade de leite cru, resfriado ou não, industrializado",
+      "unidade": "Mil litros",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000283,
+      "nome": "Quantidade de leite cru, resfriado ou não, industrializado - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 396,
+      "nome": "Número de informantes do preço do leite",
+      "unidade": "Unidades",
+      "sumarizacao": [
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 2522,
+      "nome": "Preço médio",
+      "unidade": "Reais por litro",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [
+    {
+      "id": 12716,
+      "nome": "Referência temporal",
+      "sumarizacao": {
+        "status": true,
+        "excecao": []
+      },
+      "categorias": [
+        {
+          "id": 115236,
+          "nome": "Total do trimestre",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 115233,
+          "nome": "No 1º mês",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 115234,
+          "nome": "No 2º mês",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 115235,
+          "nome": "No 3º mês",
+          "unidade": null,
+          "nivel": 1
+        }
+      ]
+    },
+    {
+      "id": 12529,
+      "nome": "Tipo de inspeção",
+      "sumarizacao": {
+        "status": true,
+        "excecao": []
+      },
+      "categorias": [
+        {
+          "id": 118225,
+          "nome": "Total",
+          "unidade": null,
+          "nivel": 0
+        }
+      ]
+    }
+  ],
+  "periodos": [
+    {
+      "id": "202503",
+      "literals": [
+        "3º trimestre 2025",
+        "3º Trimestre de 2025"
+      ],
+      "modificacao": "2026-06-16",
+      "frequencia": "trimestral",
+      "data_inicio": "2025-07-01",
+      "data_fim": "2025-09-30",
+      "ano": 2025,
+      "mes": null,
+      "trimestre": 3,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202504",
+      "literals": [
+        "4º trimestre 2025",
+        "4º Trimestre de 2025"
+      ],
+      "modificacao": "2026-06-16",
+      "frequencia": "trimestral",
+      "data_inicio": "2025-10-01",
+      "data_fim": "2025-12-31",
+      "ano": 2025,
+      "mes": null,
+      "trimestre": 4,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202601",
+      "literals": [
+        "1º trimestre 2026",
+        "1º Trimestre de 2026"
+      ],
+      "modificacao": "2026-09-15",
+      "frequencia": "trimestral",
+      "data_inicio": "2026-01-01",
+      "data_fim": "2026-03-31",
+      "ano": 2026,
+      "mes": null,
+      "trimestre": 1,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1",
+      "nome": "Brasil",
+      "nivel": {
+        "id": "N1",
+        "nome": "Brasil"
+      }
+    }
+  ]
+}

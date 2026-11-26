@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-7060",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "IPCA - Variação mensal, acumulada no ano, acumulada em 12 meses e peso mensal, para o índice geral, grupos, subgrupos, itens e subitens de produtos e serviços (a partir de janeiro/2020)",
+    "pesquisa": "Índice Nacional de Preços ao Consumidor Amplo"
+  },
+  "normalizer": null,
+  "path": "t-7060/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "c58a41ea768d947df462d9fb876903eea9b0bbe34459835b92eacd02da759908",
+  "size_bytes": 7985,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/7060/metadados"
+}

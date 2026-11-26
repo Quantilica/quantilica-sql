@@ -1,0 +1,123 @@
+{
+  "id": 6381,
+  "nome": "Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade - Total, coeficiente de variação, variações em relação aos três trimestres móveis anteriores e ao mesmo trimestre móvel do ano anterior",
+  "url": "https://sidra.ibge.gov.br/tabela/6381",
+  "pesquisa": {
+    "id": "",
+    "nome": "Pesquisa Nacional por Amostra de Domicílios Contínua mensal"
+  },
+  "assunto": "Trabalho",
+  "periodicidade": {
+    "frequencia": "trimestral móvel",
+    "inicio": 201203,
+    "fim": 202609
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 4099,
+      "nome": "Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "%",
+      "sumarizacao": [
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 4103,
+      "nome": "Coeficiente de variação - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 8811,
+      "nome": "Variação em relação a três trimestres móveis anteriores - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "Ponto percentual",
+      "sumarizacao": []
+    },
+    {
+      "id": 8814,
+      "nome": "Situação da Variação em relação a três trimestres móveis anteriores - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "Nenhuma",
+      "sumarizacao": []
+    },
+    {
+      "id": 8816,
+      "nome": "Variação em relação ao mesmo trimestre móvel do ano anterior - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "Ponto percentual",
+      "sumarizacao": []
+    },
+    {
+      "id": 8819,
+      "nome": "Situação da Variação em relação ao mesmo trimestre móvel do ano anterior - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+      "unidade": "Nenhuma",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [],
+  "periodos": [
+    {
+      "id": "202607",
+      "literals": [
+        "mai-jun-jul 2026",
+        "mai-jun-jul de 2026"
+      ],
+      "modificacao": "2026-08-27",
+      "frequencia": "trimestre_movel",
+      "data_inicio": "2026-05-01",
+      "data_fim": "2026-07-31",
+      "ano": 2026,
+      "mes": 7,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202608",
+      "literals": [
+        "jun-jul-ago 2026",
+        "jun-jul-ago de 2026"
+      ],
+      "modificacao": "2026-09-29",
+      "frequencia": "trimestre_movel",
+      "data_inicio": "2026-06-01",
+      "data_fim": "2026-08-31",
+      "ano": 2026,
+      "mes": 8,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202609",
+      "literals": [
+        "jul-ago-set 2026",
+        "jul-ago-set de 2026"
+      ],
+      "modificacao": "2026-10-30",
+      "frequencia": "trimestre_movel",
+      "data_inicio": "2026-07-01",
+      "data_fim": "2026-09-30",
+      "ano": 2026,
+      "mes": 9,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1",
+      "nome": "Brasil",
+      "nivel": {
+        "id": "N1",
+        "nome": "Brasil"
+      }
+    }
+  ]
+}

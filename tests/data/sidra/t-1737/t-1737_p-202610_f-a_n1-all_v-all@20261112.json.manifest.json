@@ -1,0 +1,27 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-1737",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "modificacao": "2026-11-12",
+    "nivel_territorial": "N1",
+    "periodos": [
+      "202610"
+    ]
+  },
+  "normalizer": null,
+  "path": "t-1737/t-1737_p-202610_f-a_n1-all_v-all@20261112.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "cc45544525f32edbdcfd8b921a6ab1f6f546acef4a8bf21d6cd183ef34473385",
+  "size_bytes": 1838,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/all/p/202610/h/y/f/a/d/m"
+}

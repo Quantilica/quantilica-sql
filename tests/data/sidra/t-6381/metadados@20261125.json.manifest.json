@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-6381",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade - Total, coeficiente de variação, variações em relação aos três trimestres móveis anteriores e ao mesmo trimestre móvel do ano anterior",
+    "pesquisa": "Pesquisa Nacional por Amostra de Domicílios Contínua mensal"
+  },
+  "normalizer": null,
+  "path": "t-6381/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "1293a49b228a9fc2fc1af0e6c60a39d5855a6d1171c43ebc73ec8e4109d16e49",
+  "size_bytes": 3474,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/6381/metadados"
+}

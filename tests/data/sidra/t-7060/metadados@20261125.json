@@ -1,0 +1,362 @@
+{
+  "id": 7060,
+  "nome": "IPCA - Variação mensal, acumulada no ano, acumulada em 12 meses e peso mensal, para o índice geral, grupos, subgrupos, itens e subitens de produtos e serviços (a partir de janeiro/2020)",
+  "url": "https://sidra.ibge.gov.br/tabela/7060",
+  "pesquisa": {
+    "id": "",
+    "nome": "Índice Nacional de Preços ao Consumidor Amplo"
+  },
+  "assunto": "Índices de preços",
+  "periodicidade": {
+    "frequencia": "mensal",
+    "inicio": 202001,
+    "fim": 202610
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1",
+      "N6",
+      "N7"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 63,
+      "nome": "IPCA - Variação mensal",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 69,
+      "nome": "IPCA - Variação acumulada no ano",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 2265,
+      "nome": "IPCA - Variação acumulada em 12 meses",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 66,
+      "nome": "IPCA - Peso mensal",
+      "unidade": "%",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [
+    {
+      "id": 315,
+      "nome": "Geral, grupo, subgrupo, item e subitem",
+      "sumarizacao": {
+        "status": true,
+        "excecao": []
+      },
+      "categorias": [
+        {
+          "id": 7169,
+          "nome": "Índice geral",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 7206,
+          "nome": "1103020.Abobrinha",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7220,
+          "nome": "1104003.Açúcar refinado",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 47620,
+          "nome": "1104067.Açúcar demerara",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7249,
+          "nome": "1105012.Cheiro-verde",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7283,
+          "nome": "1107.Carnes",
+          "unidade": null,
+          "nivel": 3
+        },
+        {
+          "id": 7293,
+          "nome": "1107087.Chã de dentro",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7300,
+          "nome": "1107095.Acém",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7306,
+          "nome": "1108004.Peixe - corvina",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7339,
+          "nome": "1109008.Linguiça",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 107617,
+          "nome": "1110009.Frango inteiro",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 107619,
+          "nome": "1111011.Queijo",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7375,
+          "nome": "1112015.Pão francês",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7407,
+          "nome": "1115017.Pepino em conserva",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7415,
+          "nome": "1116.Sal e condimentos",
+          "unidade": null,
+          "nivel": 3
+        },
+        {
+          "id": 7422,
+          "nome": "1116026.Fermento",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7434,
+          "nome": "1201001.Refeição",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 107639,
+          "nome": "2103040.Tijolo",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7463,
+          "nome": "2104003.Saco para lixo",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 47635,
+          "nome": "2104019.Sabão líquido",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7482,
+          "nome": "2201004.Gás de botijão",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7521,
+          "nome": "32.Aparelhos eletroeletrônicos",
+          "unidade": null,
+          "nivel": 2
+        },
+        {
+          "id": 7539,
+          "nome": "3201050.Chuveiro elétrico",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7549,
+          "nome": "3301.Consertos e manutenção",
+          "unidade": null,
+          "nivel": 3
+        },
+        {
+          "id": 7558,
+          "nome": "4.Vestuário",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 7604,
+          "nome": "42.Calçados e acessórios",
+          "unidade": null,
+          "nivel": 2
+        },
+        {
+          "id": 7614,
+          "nome": "4201063.Tênis",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7620,
+          "nome": "44.Tecidos e armarinho",
+          "unidade": null,
+          "nivel": 2
+        },
+        {
+          "id": 7628,
+          "nome": "5101001.Ônibus urbano",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7654,
+          "nome": "5102053.Motocicleta",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7661,
+          "nome": "61.Produtos farmacêuticos e óticos",
+          "unidade": null,
+          "nivel": 2
+        },
+        {
+          "id": 7669,
+          "nome": "6101007.Antialérgico e broncodilatador",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7677,
+          "nome": "6101064.Antidiabético",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7703,
+          "nome": "6301010.Produto para unha",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7712,
+          "nome": "7.Despesas pessoais",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 7721,
+          "nome": "7101014.Depilação",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 7730,
+          "nome": "7201.Recreação",
+          "unidade": null,
+          "nivel": 3
+        },
+        {
+          "id": 47667,
+          "nome": "8102008.Livro não didático",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 107682,
+          "nome": "8104004.Curso de informática",
+          "unidade": null,
+          "nivel": 4
+        },
+        {
+          "id": 47668,
+          "nome": "9101002.Plano de telefonia fixa",
+          "unidade": null,
+          "nivel": 4
+        }
+      ]
+    }
+  ],
+  "periodos": [
+    {
+      "id": "202608",
+      "literals": [
+        "agosto 2026",
+        "agosto de 2026"
+      ],
+      "modificacao": "2026-09-11",
+      "frequencia": "mensal",
+      "data_inicio": "2026-08-01",
+      "data_fim": "2026-08-31",
+      "ano": 2026,
+      "mes": 8,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202609",
+      "literals": [
+        "setembro 2026",
+        "setembro de 2026"
+      ],
+      "modificacao": "2026-10-09",
+      "frequencia": "mensal",
+      "data_inicio": "2026-09-01",
+      "data_fim": "2026-09-30",
+      "ano": 2026,
+      "mes": 9,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202610",
+      "literals": [
+        "outubro 2026",
+        "outubro de 2026"
+      ],
+      "modificacao": "2026-11-12",
+      "frequencia": "mensal",
+      "data_inicio": "2026-10-01",
+      "data_fim": "2026-10-31",
+      "ano": 2026,
+      "mes": 10,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1",
+      "nome": "Brasil",
+      "nivel": {
+        "id": "N1",
+        "nome": "Brasil"
+      }
+    }
+  ]
+}

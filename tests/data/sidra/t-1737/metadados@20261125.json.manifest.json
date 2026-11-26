@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-1737",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "IPCA - Série histórica com número-índice, variação mensal e variações acumuladas em 3 meses, em 6 meses, no ano e em 12 meses (a partir de dezembro/1979)",
+    "pesquisa": "Índice Nacional de Preços ao Consumidor Amplo"
+  },
+  "normalizer": null,
+  "path": "t-1737/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "292ee93d062ada19008c238ae512e581ac070caeec3dd2536767113481784413",
+  "size_bytes": 2650,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/1737/metadados"
+}

@@ -1,0 +1,325 @@
+{
+  "id": 6579,
+  "nome": "População residente estimada",
+  "url": "https://sidra.ibge.gov.br/tabela/6579",
+  "pesquisa": {
+    "id": "",
+    "nome": "Estimativas de População"
+  },
+  "assunto": "Geral",
+  "periodicidade": {
+    "frequencia": "anual",
+    "inicio": 2001,
+    "fim": 2026
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1",
+      "N2",
+      "N6",
+      "N3"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 9324,
+      "nome": "População residente estimada",
+      "unidade": "Pessoas",
+      "sumarizacao": [
+        "nivelTerritorial"
+      ]
+    }
+  ],
+  "classificacoes": [],
+  "periodos": [
+    {
+      "id": "2024",
+      "literals": [
+        "2024"
+      ],
+      "modificacao": "2024-12-30",
+      "frequencia": "anual",
+      "data_inicio": "2024-01-01",
+      "data_fim": "2024-12-31",
+      "ano": 2024,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "2025",
+      "literals": [
+        "2025"
+      ],
+      "modificacao": "2026-08-28",
+      "frequencia": "anual",
+      "data_inicio": "2025-01-01",
+      "data_fim": "2025-12-31",
+      "ano": 2025,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "2026",
+      "literals": [
+        "2026"
+      ],
+      "modificacao": "2026-08-28",
+      "frequencia": "anual",
+      "data_inicio": "2026-01-01",
+      "data_fim": "2026-12-31",
+      "ano": 2026,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1100015",
+      "nome": "Alta Floresta D'Oeste",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "1502301",
+      "nome": "Capitão Poço",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "1710508",
+      "nome": "Itacajá",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2106003",
+      "nome": "Lima Campos",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2203404",
+      "nome": "Dom Expedito Lopes",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2302909",
+      "nome": "Capistrano",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2403251",
+      "nome": "Parnamirim",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2504074",
+      "nome": "Caraúbas",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2601409",
+      "nome": "Barreiros",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2701506",
+      "nome": "Campo Grande",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2902005",
+      "nome": "Aracatu",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2917607",
+      "nome": "Jaguaquara",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "2931905",
+      "nome": "Tucano",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3114907",
+      "nome": "Casa Grande",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3130556",
+      "nome": "Imbé de Minas",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3145604",
+      "nome": "Oliveira",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3161502",
+      "nome": "São Geraldo",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3203502",
+      "nome": "Montanha",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3505609",
+      "nome": "Barrinha",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3521705",
+      "nome": "Itaberá",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3538709",
+      "nome": "Piracicaba",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "3555208",
+      "nome": "Turiúba",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4111209",
+      "nome": "Itapejara d'Oeste",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4125100",
+      "nome": "São João do Triunfo",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4208500",
+      "nome": "Ituporanga",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4300901",
+      "nome": "Aratiba",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4310363",
+      "nome": "Imigrante",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "4318440",
+      "nome": "São Jorge",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "5008305",
+      "nome": "Três Lagoas",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    },
+    {
+      "id": "5204003",
+      "nome": "Cabeceiras",
+      "nivel": {
+        "id": "N6",
+        "nome": "Município"
+      }
+    }
+  ]
+}

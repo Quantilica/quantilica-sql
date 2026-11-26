@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-1086",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:30Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "Número de informantes e Quantidade de leite cru, resfriado ou não, adquirido e industrializado, e preço médio, no mês e no trimestre, por tipo de inspeção",
+    "pesquisa": "Pesquisa Trimestral do Leite"
+  },
+  "normalizer": null,
+  "path": "t-1086/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "109f0d8f6d9ae993e273077cfdda0f86fa2b3bea584214805d3cb8d5910fdb13",
+  "size_bytes": 4250,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/1086/metadados"
+}

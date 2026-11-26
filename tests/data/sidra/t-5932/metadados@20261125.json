@@ -1,0 +1,192 @@
+{
+  "id": 5932,
+  "nome": "Taxa de variação do índice de volume trimestral",
+  "url": "https://sidra.ibge.gov.br/tabela/5932",
+  "pesquisa": {
+    "id": "",
+    "nome": "Contas Nacionais Trimestrais"
+  },
+  "assunto": "Contas Nacionais e Regionais",
+  "periodicidade": {
+    "frequencia": "trimestral",
+    "inicio": 199601,
+    "fim": 202602
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 6561,
+      "nome": "Taxa trimestral (em relação ao mesmo período do ano anterior)",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 6562,
+      "nome": "Taxa acumulada em quatro trimestres (em relação ao mesmo período do ano anterior)",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 6563,
+      "nome": "Taxa acumulada ao longo do ano (em relação ao mesmo período do ano anterior)",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 6564,
+      "nome": "Taxa trimestre contra trimestre imediatamente anterior",
+      "unidade": "%",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [
+    {
+      "id": 11255,
+      "nome": "Setores e subsetores",
+      "sumarizacao": {
+        "status": false,
+        "excecao": []
+      },
+      "categorias": [
+        {
+          "id": 90687,
+          "nome": "Agropecuária - total",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90692,
+          "nome": "Indústrias extrativas",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90695,
+          "nome": "Eletricidade e gás, água, esgoto, atividades de gestão de resíduos",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90696,
+          "nome": "Serviços - total",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90698,
+          "nome": "Transporte, armazenagem e correio",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90700,
+          "nome": "Atividades financeiras, de seguros e serviços relacionados",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90701,
+          "nome": "Outras atividades de serviços",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90705,
+          "nome": "Valor adicionado a preços básicos",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90706,
+          "nome": "Impostos líquidos sobre produtos",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 90707,
+          "nome": "PIB a preços de mercado",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 93405,
+          "nome": "Despesa de consumo da administração pública",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 93407,
+          "nome": "Exportação de bens e serviços",
+          "unidade": null,
+          "nivel": 0
+        }
+      ]
+    }
+  ],
+  "periodos": [
+    {
+      "id": "202504",
+      "literals": [
+        "4º trimestre 2025",
+        "4º Trimestre de 2025"
+      ],
+      "modificacao": "2026-09-01",
+      "frequencia": "trimestral",
+      "data_inicio": "2025-10-01",
+      "data_fim": "2025-12-31",
+      "ano": 2025,
+      "mes": null,
+      "trimestre": 4,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202601",
+      "literals": [
+        "1º trimestre 2026",
+        "1º Trimestre de 2026"
+      ],
+      "modificacao": "2026-09-01",
+      "frequencia": "trimestral",
+      "data_inicio": "2026-01-01",
+      "data_fim": "2026-03-31",
+      "ano": 2026,
+      "mes": null,
+      "trimestre": 1,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "202602",
+      "literals": [
+        "2º trimestre 2026",
+        "2º Trimestre de 2026"
+      ],
+      "modificacao": "2026-09-01",
+      "frequencia": "trimestral",
+      "data_inicio": "2026-04-01",
+      "data_fim": "2026-06-30",
+      "ano": 2026,
+      "mes": null,
+      "trimestre": 2,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "1",
+      "nome": "Brasil",
+      "nivel": {
+        "id": "N1",
+        "nome": "Brasil"
+      }
+    }
+  ]
+}

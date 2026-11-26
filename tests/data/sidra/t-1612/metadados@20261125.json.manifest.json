@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-1612",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "Área plantada, área colhida, quantidade produzida, rendimento médio e valor da produção das lavouras temporárias",
+    "pesquisa": "Produção Agrícola Municipal"
+  },
+  "normalizer": null,
+  "path": "t-1612/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "f95868aa825c2b6b573e6a9b12875111c3443b9ae1e0ddc59ed8b4588551f80a",
+  "size_bytes": 7359,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/1612/metadados"
+}

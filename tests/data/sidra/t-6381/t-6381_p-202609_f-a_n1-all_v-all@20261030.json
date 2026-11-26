@@ -1,0 +1,93 @@
+[
+  {
+    "NC": "Nível Territorial (Código)",
+    "NN": "Nível Territorial",
+    "MC": "Unidade de Medida (Código)",
+    "MN": "Unidade de Medida",
+    "V": "Valor",
+    "D1C": "Brasil (Código)",
+    "D1N": "Brasil",
+    "D2C": "Variável (Código)",
+    "D2N": "Variável",
+    "D3C": "Trimestre Móvel (Código)",
+    "D3N": "Trimestre Móvel"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "2",
+    "MN": "%",
+    "V": "5.2",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "4099",
+    "D2N": "Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "2",
+    "MN": "%",
+    "V": "1.4",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "4103",
+    "D2N": "Coeficiente de variação - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "1722",
+    "MN": "Ponto percentual",
+    "V": "-0.2",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "8811",
+    "D2N": "Variação em relação a três trimestres móveis anteriores - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "1694",
+    "MN": "Nenhuma",
+    "V": "Z",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "8814",
+    "D2N": "Situação da Variação em relação a três trimestres móveis anteriores - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "1722",
+    "MN": "Ponto percentual",
+    "V": "-0.4",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "8816",
+    "D2N": "Variação em relação ao mesmo trimestre móvel do ano anterior - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  },
+  {
+    "NC": "1",
+    "NN": "Brasil",
+    "MC": "1694",
+    "MN": "Nenhuma",
+    "V": "Z",
+    "D1C": "1",
+    "D1N": "Brasil",
+    "D2C": "8819",
+    "D2N": "Situação da Variação em relação ao mesmo trimestre móvel do ano anterior - Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade",
+    "D3C": "202609",
+    "D3N": "jul-ago-set 2026"
+  }
+]

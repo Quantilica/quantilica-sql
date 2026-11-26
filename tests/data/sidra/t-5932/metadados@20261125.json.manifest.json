@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-5932",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:31Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "Taxa de variação do índice de volume trimestral",
+    "pesquisa": "Contas Nacionais Trimestrais"
+  },
+  "normalizer": null,
+  "path": "t-5932/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "f6acd47e31f870aa42d9ba6ebb469016398de155475e8b459fd8df013e80be70",
+  "size_bytes": 4405,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/5932/metadados"
+}

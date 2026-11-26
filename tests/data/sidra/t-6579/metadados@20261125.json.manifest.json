@@ -1,0 +1,24 @@
+{
+  "content_sha256": null,
+  "dataset_id": "t-6579",
+  "execution": null,
+  "fetched_at": "2026-11-26T01:42:32Z",
+  "fingerprint": null,
+  "lineage": null,
+  "manifest_version": 2,
+  "metadata": {
+    "nome": "População residente estimada",
+    "pesquisa": "Estimativas de População"
+  },
+  "normalizer": null,
+  "path": "t-6579/metadados@20261125.json",
+  "producer": "ibge-sidra-fetcher",
+  "producer_version": null,
+  "quality": null,
+  "resource_id": null,
+  "sha256": "afd067b62130a79c9c6aadaa5ff2125429afdbcd782c78f93b350f6edff03940",
+  "size_bytes": 5812,
+  "source_id": "ibge-sidra",
+  "source_meta": null,
+  "url": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/metadados"
+}

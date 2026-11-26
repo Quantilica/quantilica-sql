@@ -1,0 +1,369 @@
+{
+  "id": 1612,
+  "nome": "Área plantada, área colhida, quantidade produzida, rendimento médio e valor da produção das lavouras temporárias",
+  "url": "https://sidra.ibge.gov.br/tabela/1612",
+  "pesquisa": {
+    "id": "",
+    "nome": "Produção Agrícola Municipal"
+  },
+  "assunto": "Lavouras temporárias",
+  "periodicidade": {
+    "frequencia": "anual",
+    "inicio": 1974,
+    "fim": 2025
+  },
+  "nivel_territorial": {
+    "administrativo": [
+      "N1",
+      "N2",
+      "N8",
+      "N9",
+      "N6",
+      "N3"
+    ],
+    "especial": [],
+    "ibge": []
+  },
+  "variaveis": [
+    {
+      "id": 109,
+      "nome": "Área plantada",
+      "unidade": "Hectares",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000109,
+      "nome": "Área plantada - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 216,
+      "nome": "Área colhida",
+      "unidade": "Hectares",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000216,
+      "nome": "Área colhida - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    },
+    {
+      "id": 214,
+      "nome": "Quantidade produzida",
+      "unidade": "Toneladas",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 112,
+      "nome": "Rendimento médio da produção",
+      "unidade": "Quilogramas por Hectare",
+      "sumarizacao": []
+    },
+    {
+      "id": 215,
+      "nome": "Valor da produção",
+      "unidade": "Mil Cruzeiros [1974 a 1985, 1990 a 1992], Mil Cruzados [1986 a 1988], Mil Cruzados Novos [1989], Mil Cruzeiros Reais [1993], Mil Reais [1994 a 2025]",
+      "sumarizacao": [
+        "periodo",
+        "nivelTerritorial"
+      ]
+    },
+    {
+      "id": 1000215,
+      "nome": "Valor da produção - percentual do total geral",
+      "unidade": "%",
+      "sumarizacao": []
+    }
+  ],
+  "classificacoes": [
+    {
+      "id": 81,
+      "nome": "Produto das lavouras temporárias",
+      "sumarizacao": {
+        "status": true,
+        "excecao": [
+          214,
+          112
+        ]
+      },
+      "categorias": [
+        {
+          "id": 0,
+          "nome": "Total",
+          "unidade": null,
+          "nivel": 0
+        },
+        {
+          "id": 40471,
+          "nome": "Alfafa fenada",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2689,
+          "nome": "Algodão herbáceo (em caroço)",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2690,
+          "nome": "Alho",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2691,
+          "nome": "Amendoim (em casca)",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2694,
+          "nome": "Batata-doce",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2697,
+          "nome": "Cebola",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2703,
+          "nome": "Fumo (em folha)",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2707,
+          "nome": "Mamona (baga)",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 83378,
+          "nome": "Morango",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 83376,
+          "nome": "Pimentão",
+          "unidade": null,
+          "nivel": 1
+        },
+        {
+          "id": 2716,
+          "nome": "Trigo (em grão)",
+          "unidade": null,
+          "nivel": 1
+        }
+      ]
+    }
+  ],
+  "periodos": [
+    {
+      "id": "2023",
+      "literals": [
+        "2023"
+      ],
+      "modificacao": "2026-10-23",
+      "frequencia": "anual",
+      "data_inicio": "2023-01-01",
+      "data_fim": "2023-12-31",
+      "ano": 2023,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "2024",
+      "literals": [
+        "2024"
+      ],
+      "modificacao": "2026-10-23",
+      "frequencia": "anual",
+      "data_inicio": "2024-01-01",
+      "data_fim": "2024-12-31",
+      "ano": 2024,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    },
+    {
+      "id": "2025",
+      "literals": [
+        "2025"
+      ],
+      "modificacao": "2026-10-23",
+      "frequencia": "anual",
+      "data_inicio": "2025-01-01",
+      "data_fim": "2025-12-31",
+      "ano": 2025,
+      "mes": null,
+      "trimestre": null,
+      "semestre": null,
+      "ano_fim": null
+    }
+  ],
+  "localidades": [
+    {
+      "id": "2703",
+      "nome": "Leste Alagoano",
+      "nivel": {
+        "id": "N8",
+        "nome": "Mesorregião geográfica"
+      }
+    },
+    {
+      "id": "11",
+      "nome": "Rondônia",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "13",
+      "nome": "Amazonas",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "14",
+      "nome": "Roraima",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "15",
+      "nome": "Pará",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "17",
+      "nome": "Tocantins",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "21",
+      "nome": "Maranhão",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "23",
+      "nome": "Ceará",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "24",
+      "nome": "Rio Grande do Norte",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "26",
+      "nome": "Pernambuco",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "27",
+      "nome": "Alagoas",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "29",
+      "nome": "Bahia",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "31",
+      "nome": "Minas Gerais",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "32",
+      "nome": "Espírito Santo",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "33",
+      "nome": "Rio de Janeiro",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "41",
+      "nome": "Paraná",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "42",
+      "nome": "Santa Catarina",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    },
+    {
+      "id": "50",
+      "nome": "Mato Grosso do Sul",
+      "nivel": {
+        "id": "N3",
+        "nome": "Unidade da Federação"
+      }
+    }
+  ]
+}
