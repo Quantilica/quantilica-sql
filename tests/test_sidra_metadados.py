@@ -6,7 +6,7 @@ import datetime as dt
 import shutil
 
 import pytest
-from _sidra_fixtures import DADOS
+from _sidra_fixtures import DADOS, unico
 
 from quantilica_sql.sidra import (
     SidraFonteError,
@@ -72,7 +72,7 @@ def test_codigo_202609_mensal_e_trimestre_movel_ficam_distintos():
 def test_vigente_e_o_metadados_mais_novo_da_pasta(tmp_path):
     pasta = tmp_path / "t-1737"
     shutil.copytree(DADOS / "t-1737", pasta)
-    atual = next(pasta.glob("metadados@????????.json"))
+    atual = unico(pasta.glob("metadados@????????.json"))
     antigo = pasta / "metadados@20260101.json"
     shutil.copy(atual, antigo)
     novo = pasta / "metadados@20270101.json"

@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from _sidra_fixtures import CASOS, DADOS, C, P, T, V
+from _sidra_fixtures import CASOS, DADOS, C, P, T, V, unico
 
 from quantilica_sql.sidra import (
     SidraFonteError,
@@ -126,7 +126,7 @@ def test_erro_papel_ambiguo_duas_dimensoes_de_variavel(tmp_path):
 
 def test_erro_papel_ambiguo_duas_classificacoes_com_o_mesmo_nome(tmp_path):
     arquivo = _copia_1086(tmp_path)
-    meta_arq = next(arquivo.parent.glob("metadados@????????.json"))
+    meta_arq = unico(arquivo.parent.glob("metadados@????????.json"))
     bruto = json.loads(meta_arq.read_text(encoding="utf-8"))
     bruto["classificacoes"][1]["nome"] = bruto["classificacoes"][0]["nome"]
     meta_arq.write_text(json.dumps(bruto), encoding="utf-8")
@@ -167,7 +167,7 @@ def test_erro_sem_metadados_com_sidecar(tmp_path):
 
 def test_erro_classificacao_da_url_fora_dos_metadados(tmp_path):
     arquivo = _copia_1086(tmp_path)
-    meta_arq = next(arquivo.parent.glob("metadados@????????.json"))
+    meta_arq = unico(arquivo.parent.glob("metadados@????????.json"))
     bruto = json.loads(meta_arq.read_text(encoding="utf-8"))
     bruto["classificacoes"][0]["id"] = 99999
     bruto["classificacoes"][0]["nome"] = "Outra"
@@ -196,5 +196,5 @@ def test_erro_territorio_que_nao_confere_com_nc_nn(tmp_path):
 
 
 def test_metadados_vigente_na_pasta_do_arquivo():
-    meta = ler_metadados(next((DADOS / "t-1086").glob("metadados@????????.json")))
+    meta = ler_metadados(unico((DADOS / "t-1086").glob("metadados@????????.json")))
     assert meta.tabela_id == 1086

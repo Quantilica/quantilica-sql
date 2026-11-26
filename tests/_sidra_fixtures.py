@@ -13,6 +13,14 @@ from quantilica_sql.sidra import Papel, papeis_por_url
 
 DADOS = Path(__file__).parent / "data" / "sidra"
 
+
+def unico(achados) -> Path:
+    """O único caminho de `achados` (ordenado); falha se houver zero ou mais de um."""
+    lista = sorted(achados)
+    assert len(lista) == 1, lista
+    return lista[0]
+
+
 T, V, P = Papel("territorio"), Papel("variavel"), Papel("periodo")
 
 

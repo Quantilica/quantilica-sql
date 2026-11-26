@@ -7,13 +7,13 @@ import json
 from decimal import Decimal
 
 import pytest
-from _sidra_fixtures import DADOS
+from _sidra_fixtures import DADOS, unico
 
 from quantilica_sql.sidra import SidraFonteError, converter_valor, ler_arquivo
 
-ARQ_1612 = next((DADOS / "t-1612").glob("t-1612_*@????????.json"))
-ARQ_6381 = next((DADOS / "t-6381").glob("t-6381_*@????????.json"))
-ARQ_1086N = next((DADOS / "ordens-de-url" / "t-1086").glob("*n1n3@????????.json"))
+ARQ_1612 = unico((DADOS / "t-1612").glob("t-1612_*@????????.json"))
+ARQ_6381 = unico((DADOS / "t-6381").glob("t-6381_*@????????.json"))
+ARQ_1086N = unico((DADOS / "ordens-de-url" / "t-1086").glob("*n1n3@????????.json"))
 
 
 @pytest.mark.parametrize("simbolo", ["-", "..", "...", "X", "Z", ""])
@@ -96,7 +96,7 @@ def test_ida_e_volta_do_numero_e_identica_ao_texto(arquivo):
 
 
 def test_decimal_com_escala_de_um_arquivo_real():
-    arq = next((DADOS / "t-1737").glob("t-1737_*@????????.json"))
+    arq = unico((DADOS / "t-1737").glob("t-1737_*@????????.json"))
     valores = {str(c.valor) for c in ler_arquivo(arq).celulas}
     assert "7706.5900000000000" in valores
     assert Decimal("7706.5900000000000").as_tuple().exponent == -13
@@ -107,7 +107,7 @@ def test_valor_inesperado_no_arquivo_para_a_leitura_com_erro_claro(tmp_path):
 
     pasta = tmp_path / "t-1737"
     shutil.copytree(DADOS / "t-1737", pasta)
-    arq = next(pasta.glob("t-1737_*@????????.json"))
+    arq = unico(pasta.glob("t-1737_*@????????.json"))
     linhas = json.loads(arq.read_text(encoding="utf-8"))
     linhas[2]["V"] = "n/d"
     arq.write_text(json.dumps(linhas), encoding="utf-8")

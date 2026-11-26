@@ -19,6 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from _sidra_fixtures import unico
 
 from quantilica_sql.adapters.bcb import BcbAdapter
 from quantilica_sql.adapters.bcb_metadados import (
@@ -593,7 +594,7 @@ def test_pg_cli_real_load_bcb_sgs_all_sai_com_zero(bruto, pg, monkeypatch):
 # Ponta a ponta: load bcb --all num banco novo e as SQL reais do catálogo
 # --------------------------------------------------------------------------
 def _dados(serie: int) -> list[dict]:
-    arq = next((FIXTURES / "data").glob(f"series_{serie}@*.json"))
+    arq = unico((FIXTURES / "data").glob(f"series_{serie}@*.json"))
     return json.loads(arq.read_text("utf-8"))
 
 

@@ -16,6 +16,7 @@ from _sidra_fixtures import (
     arquivo_de_dados,
     copia_tabelas,
     nova_versao,
+    unico,
 )
 
 from quantilica_sql.adapters import get_adapter
@@ -199,18 +200,18 @@ def test_nome_diz_uma_tabela_e_os_metadados_outra_da_erro(bruto, pg):
 # Data da fonte
 # --------------------------------------------------------------------------
 def test_data_vem_do_sidecar(bruto):
-    real = next((bruto / "t-1737").glob("*@20261112.json"))
+    real = unico((bruto / "t-1737").glob("*@20261112.json"))
     assert modificacao_do_arquivo(real) == dt.date(2026, 11, 12)
 
 
 def test_data_vem_do_carimbo_do_nome_sem_sidecar(bruto):
-    antigo = next(p for p in (bruto / "t-1737").glob("*@20240301.json"))
+    antigo = unico((bruto / "t-1737").glob("*@20240301.json"))
     assert modificacao_do_arquivo(antigo) == dt.date(2024, 3, 1)
 
 
 def test_sem_data_na_fonte_fica_nula_e_nunca_um_valor_fixo(bruto, pg):
     adapter, conn, schema = pg
-    sem_data = next(p for p in (bruto / "t-1737").glob("*@00010101.json"))
+    sem_data = unico((bruto / "t-1737").glob("*@00010101.json"))
     assert modificacao_do_arquivo(sem_data) is None
     adapter.load(conn, sem_data)
     assert conn.execute(f'SELECT modificacao FROM "{schema}".versao').fetchall() == [

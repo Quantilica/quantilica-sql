@@ -16,6 +16,7 @@ from _sidra_fixtures import (
     copia_tabelas,
     nova_versao,
     reescreve,
+    unico,
 )
 
 from quantilica_sql.sidra import SidraFonteError
@@ -449,7 +450,7 @@ def test_renomeacao_de_variavel_categoria_e_classificacao_atualiza_o_nome(pg, tm
     adapter, conn, schema = pg
     raiz = copia_tabelas(tmp_path / "bruto", "7060")
     adapter.load(conn, raiz, all_partitions=True)
-    meta = next((raiz / "t-7060").glob("metadados@????????.json"))
+    meta = unico((raiz / "t-7060").glob("metadados@????????.json"))
     bruto = json.loads(meta.read_text(encoding="utf-8"))
     bruto["variaveis"][0]["nome"] = "IPCA - Variação mensal (renomeada)"
     bruto["classificacoes"][0]["nome"] = "Geral (renomeada)"
