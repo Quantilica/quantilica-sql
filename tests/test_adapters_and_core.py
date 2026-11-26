@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import polars as pl
+import pytest
 
 from quantilica_sql.adapters import get_adapter
 from quantilica_sql.core.partitions import (
@@ -109,53 +110,17 @@ def test_registered_adapters_domains():
         assert adapter.schema is not None
 
 
-def test_sidra_adapter_load_and_idempotence():
-    """Valida carga do SidraAdapter com sucesso, retorno de linhas e idempotência."""
-    state = MockDbState()
-    mock_conn = state.make_conn(rowcount=5)
+def test_sidra_adapter_identidade_e_entrada_obrigatoria():
+    """O SidraAdapter tem domínio e schema fixos e exige um caminho de entrada.
+
+    A carga em si (esquema dimensional, versões, vigência) é coberta, contra
+    PostgreSQL, por ``test_sidra_carga.py`` e ``test_sidra_adapter.py``.
+    """
     adapter = get_adapter("sidra")
     assert adapter.domain == "sidra"
     assert adapter.schema == "ibge_sidra"
-
-    rows = [
-        {
-            "tabela_sidra_id": "1732",
-            "localidade_id": 1,
-            "dimensao_id": 2,
-            "periodo_id": 2026,
-            "modificacao": "2026-01-01",
-            "ativo": True,
-            "v": "100.5",
-        }
-    ]
-
-    with tempfile.NamedTemporaryFile(suffix="_1732.json", mode="w", delete=False) as f:
-        json.dump(rows, f)
-        temp_path = Path(f.name)
-
-    try:
-        # 1ª Carga: deve processar e retornar o total de linhas
-        loaded = adapter.load(mock_conn, source_path=temp_path, table_id="1732")
-        assert loaded == 5
-        assert len(state.recorded) == 1
-        fn, ds, part, sha, linhas, meta = state.recorded[0]
-        assert fn == temp_path.name
-        assert ds == "sidra"
-        assert part == "1732"
-        assert linhas == 5
-
-        # Status: deve retornar contagens
-        status_info = adapter.status(mock_conn)
-        assert status_info["domain"] == "sidra"
-        assert status_info["schema"] == "ibge_sidra"
-        assert status_info["tabelas_carregadas"] >= 0
-
-        # 2ª Carga do mesmo arquivo: idempotência deve retornar 0 e não gravar duplicado
-        loaded_second = adapter.load(mock_conn, source_path=temp_path, table_id="1732")
-        assert loaded_second == 0
-        assert len(state.recorded) == 1  # não houve novo registro
-    finally:
-        temp_path.unlink(missing_ok=True)
+    with pytest.raises(ValueError, match="source-path"):
+        adapter.load(MockDbState().make_conn(), None)
 
 
 def test_bcb_adapter_load_and_idempotence():

@@ -14,7 +14,9 @@ Modelo estrela em formato longo (ADR de 25/11/2026):
   (``mc``, ``mn``, ``d2c``, ``d2n``, ``d4c``..``d9n``) e ``dados``
   (``tabela_sidra_id``, ``localidade_id``, ``dimensao_id``, ``periodo_id``,
   ``modificacao``, ``ativo``, ``v``);
-* a view ``observacao_plana``, com os nomes, para quem consulta sem JOIN.
+* a view ``observacao_plana``, com os nomes, para quem consulta sem JOIN, e a função
+  ``dados_em(data)``: o que valia numa data (a versão de maior ``modificacao`` até
+  ela em cada célula; versão sem data não entra).
 
 Nenhuma DDL exige ``CREATE`` no banco quando o schema já existe (só no schema).
 Exige PostgreSQL 12+ (colunas geradas ``STORED``).
@@ -52,6 +54,7 @@ TABELAS = (
     "arquivo_carregado",
 )
 VIEWS = ("dimensao", "dados", "observacao_plana")
+FUNCOES = ("dados_em",)
 
 
 class EsquemaAntigoError(RuntimeError):
@@ -255,6 +258,27 @@ JOIN {s}.variavel v ON v.tabela_id = s.tabela_id AND v.id = s.variavel_id
 JOIN {s}.localidade l ON l.id = o.localidade_id
 JOIN {s}.periodo p ON p.id = o.periodo_id
 LEFT JOIN {s}.versao ve ON ve.id = o.versao_id;
+
+CREATE OR REPLACE FUNCTION {s}.dados_em(data date)
+RETURNS TABLE (
+    tabela_sidra_id text,
+    localidade_id   integer,
+    dimensao_id     integer,
+    periodo_id      integer,
+    modificacao     date,
+    ativo           boolean,
+    v               text
+)
+LANGUAGE sql STABLE AS $fn$
+    SELECT DISTINCT ON (o.serie_id, o.localidade_id, o.periodo_id)
+           o.tabela_id::text, o.localidade_id, o.serie_id, o.periodo_id,
+           ve.modificacao, true, COALESCE(o.valor::text, o.simbolo)
+    FROM {s}.observacao o
+    JOIN {s}.versao ve ON ve.id = o.versao_id
+    WHERE ve.modificacao <= data
+    ORDER BY o.serie_id, o.localidade_id, o.periodo_id,
+             ve.modificacao DESC, ve.id DESC
+$fn$;
 """
 )
 

@@ -132,6 +132,22 @@ def cmd_load(
             help="Força recarga mesmo se já registrado em arquivo_carregado",
         ),
     ] = False,
+    historico: Annotated[
+        bool,
+        typer.Option(
+            "--historico",
+            help="SIDRA: com --all/--table, carrega todas as versões de cada "
+            "consulta (não só a vigente), da mais antiga para a mais nova",
+        ),
+    ] = False,
+    recriar: Annotated[
+        bool,
+        typer.Option(
+            "--recriar",
+            help="SIDRA: renomeia o esquema antigo (0.3.x) para dados_legado_v0 e "
+            "cria o esquema novo (sem migração de dados)",
+        ),
+    ] = False,
 ) -> None:
     """Executa a rotina de carga para uma fonte de dados no PostgreSQL."""
     try:
@@ -152,6 +168,8 @@ def cmd_load(
                 tablespace=tablespace,
                 staging_dir=staging_obj,
                 force=force,
+                historico=historico,
+                recriar=recriar,
             )
             console.print(
                 f"[green]Carga concluída![/green] {rows:,} linhas processadas."

@@ -167,3 +167,53 @@ def casos_catorze() -> dict[str, tuple[Path, list[Papel]]]:
 
 
 CASOS = casos_catorze()
+
+
+# --------------------------------------------------------------------------
+# bruto montado em disco para os testes de carga (cópias das fixtures reais)
+# --------------------------------------------------------------------------
+def arquivo_de_dados(pasta: Path, tabela: str) -> Path:
+    """O arquivo de dados (sem sidecar nem metadados) de ``t-<tabela>``."""
+    return next(
+        p
+        for p in sorted((pasta / f"t-{tabela}").glob(f"t-{tabela}_*@????????.json"))
+        if not p.name.endswith(".manifest.json")
+    )
+
+
+def copia_tabelas(raiz: Path, *tabelas: str) -> Path:
+    """Copia as pastas ``t-<id>`` das fixtures para ``raiz`` (o bruto de teste)."""
+    for t in tabelas:
+        shutil.copytree(DADOS / f"t-{t}", raiz / f"t-{t}")
+    return raiz
+
+
+def remove_sidecar(arq: Path) -> None:
+    arq.with_name(arq.name + ".manifest.json").unlink(missing_ok=True)
+
+
+def reescreve(arq: Path, altera) -> Path:
+    """Reescreve o arquivo no lugar, linha a linha (``altera`` devolve a linha ou
+    ``None`` para descartá-la; o cabeçalho passa intacto). O sidecar sai: o hash
+    muda."""
+    linhas = json.loads(arq.read_text(encoding="utf-8"))
+    novas = [linhas[0]]
+    for r in linhas[1:]:
+        r = altera(dict(r))
+        if r is not None:
+            novas.append(r)
+    arq.write_text(json.dumps(novas, ensure_ascii=False, indent=2), encoding="utf-8")
+    remove_sidecar(arq)
+    return arq
+
+
+def nova_versao(arq: Path, stamp: str, altera=None, *, sufixo: str = "") -> Path:
+    """Copia ``arq`` como outra versão (``@<stamp>``), sem sidecar, alterando as
+    linhas com ``altera``. ``sufixo`` muda o nome da consulta (outra consulta)."""
+    nome = re.sub(r"@\d{8}(?:T\d{6})?", f"{sufixo}@{stamp}", arq.name)
+    novo = arq.with_name(nome)
+    shutil.copy(arq, novo)
+    remove_sidecar(novo)
+    if altera is not None:
+        reescreve(novo, altera)
+    return novo

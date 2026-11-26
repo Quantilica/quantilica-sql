@@ -1,4 +1,10 @@
-"""Adaptador para tabelas agregadas do IBGE SIDRA."""
+"""Adaptador para tabelas agregadas do IBGE SIDRA.
+
+Carrega a resposta crua da API (``/values``) num esquema dimensional (ver
+:mod:`quantilica_sql.sidra.esquema`): o papel de cada ``D<i>`` vem da URL do sidecar e
+dos metadados (:mod:`quantilica_sql.sidra.papeis`), cada arquivo é uma versão e a
+vigência é por célula (:mod:`quantilica_sql.sidra.carga`).
+"""
 
 from __future__ import annotations
 
@@ -11,20 +17,18 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
-from quantilica.core.manifests import MANIFEST_SIDECAR_SUFFIX
+from quantilica.core.manifests import MANIFEST_SIDECAR_SUFFIX, read_manifest_sidecar
 
 from quantilica_sql.adapters._entrada import arquivos_vigentes
 from quantilica_sql.adapters.base import BaseSourceAdapter
-from quantilica_sql.core.copy_stream import copy_from_rows
-from quantilica_sql.core.tracker import (
-    ensure_tracker_table,
-    is_file_loaded,
-    record_loaded_file,
-)
-from quantilica_sql.core.txscope import commit_if_standalone
+from quantilica_sql.core.tracker import ensure_tracker_table
 from quantilica_sql.database import ensure_schema
-from quantilica_sql.sidra.esquema import esquema_antigo
+from quantilica_sql.sidra.carga import Carregador
+from quantilica_sql.sidra.erros import SidraFonteError
+from quantilica_sql.sidra.esquema import esquema_antigo, preparar_esquema
 from quantilica_sql.sidra.esquema import resumo as esquema_resumo
+from quantilica_sql.sidra.leitura import ler_arquivo
+from quantilica_sql.sidra.metadados import metadados_da_pasta
 
 logger = logging.getLogger("quantilica_sql.adapters.sidra")
 
@@ -96,6 +100,26 @@ def _id_da_tabela(path: Path) -> str | None:
     return None
 
 
+def _tabela_do_arquivo(path: Path) -> str:
+    """Id da tabela de um arquivo: o nome (``t-<id>_...`` ou pasta ``t-<id>``), o
+    ``dataset_id`` do sidecar ou os metadados da pasta. Sem nenhum, erro."""
+    id_ = _id_da_tabela(path)
+    if id_ is not None:
+        return id_
+    manifesto = read_manifest_sidecar(path)
+    if manifesto is not None:
+        m = _RE_TABELA_NO_NOME.match(manifesto.dataset_id or "")
+        if m:
+            return m.group(1)
+    meta = metadados_da_pasta(path.parent)
+    if meta is not None:
+        return str(meta.tabela_id)
+    raise SidraFonteError(
+        f"{path}: não deu para saber a tabela do arquivo (esperado "
+        "t-<id>_...@AAAAMMDD.json ou um sidecar/metadados que a nomeie)."
+    )
+
+
 class SidraAdapter(BaseSourceAdapter):
     """Adaptador de carga para dados do IBGE SIDRA."""
 
@@ -129,60 +153,23 @@ class SidraAdapter(BaseSourceAdapter):
             "observacoes": res["observacoes"],
             "observacoes_ativas": res["observacoes_ativas"],
             "arquivos_carregados": arquivos,
-            "linhas_totais": linhas,
+            "linhas_totais": int(linhas),
             "esquema_antigo": esquema_antigo(conn, self.schema),
         }
 
-    def _ensure_tables(self, conn: psycopg.Connection) -> None:
-        """Garante a existência da tabela e índices de dados do SIDRA."""
-        ensure_schema(conn, self.schema)
-        create_sql = sql.SQL(
-            """
-            CREATE TABLE IF NOT EXISTS {schema}.dados (
-                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                tabela_sidra_id TEXT NOT NULL,
-                localidade_id BIGINT NOT NULL,
-                dimensao_id BIGINT NOT NULL,
-                periodo_id INTEGER NOT NULL,
-                modificacao DATE,
-                ativo BOOLEAN NOT NULL DEFAULT TRUE,
-                v TEXT NOT NULL
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS uq_dados_ativo 
-            ON {schema}.dados (tabela_sidra_id, localidade_id, dimensao_id, periodo_id) 
-            WHERE ativo;
-            """
-        ).format(schema=sql.Identifier(self.schema))
-        with conn.cursor() as cur:
-            cur.execute(create_sql)
-            # Tabelas criadas antes: ``modificacao`` era NOT NULL DEFAULT CURRENT_DATE
-            # (data da carga, que não é a data da fonte). Sem data na fonte, é NULL.
-            cur.execute(
-                """
-                SELECT is_nullable, column_default FROM information_schema.columns
-                WHERE table_schema = %s AND table_name = 'dados'
-                  AND column_name = 'modificacao';
-                """,
-                (self.schema,),
-            )
-            col = cur.fetchone()
-            if col and (col[0] == "NO" or col[1] is not None):
-                cur.execute(
-                    sql.SQL(
-                        "ALTER TABLE {schema}.dados "
-                        "ALTER COLUMN modificacao DROP NOT NULL, "
-                        "ALTER COLUMN modificacao DROP DEFAULT;"
-                    ).format(schema=sql.Identifier(self.schema))
-                )
-        commit_if_standalone(conn)
-
     def _arquivos_vigentes(
-        self, raiz: Path, tabela: str | None, *, all_partitions: bool = True
+        self,
+        raiz: Path,
+        tabela: str | None,
+        *,
+        all_partitions: bool = True,
+        historico: bool = False,
     ) -> list[Path]:
-        """Arquivos de dados da pasta, só a versão vigente (``@AAAAMMDD`` mais
-        novo) de cada consulta, em ordem. ``metadados@``, ``indice_pesquisas@``,
-        sidecars e ``*.tmp`` não são dados."""
-        return arquivos_vigentes(
+        """Arquivos de dados da pasta: só a versão vigente (``@AAAAMMDD`` mais
+        nova) de cada consulta ou, com ``historico``, todas as versões, da mais
+        antiga para a mais nova. ``metadados@``, ``indice_pesquisas@``, sidecars e
+        ``*.tmp`` não são dados."""
+        arquivos = arquivos_vigentes(
             raiz,
             all_partitions=all_partitions,
             table=tabela,
@@ -192,21 +179,13 @@ class SidraAdapter(BaseSourceAdapter):
             fonte="SIDRA",
             esperado="t-<id>/t-<id>_...@AAAAMMDD.json",
             logger=logger,
+            todas_as_versoes=historico,
         )
-
-    def _load_directory(
-        self, conn: psycopg.Connection, raiz: Path, **kwargs: Any
-    ) -> int:
-        tabela = kwargs.get("table")
-        arquivos = self._arquivos_vigentes(
-            raiz,
-            str(tabela) if tabela else None,
-            all_partitions=bool(kwargs.get("all_partitions") or kwargs.get("all")),
-        )
-        total = 0
-        for arquivo in arquivos:
-            total += self.load(conn, arquivo, **{**kwargs, "table": None})
-        return total
+        if historico:
+            arquivos.sort(
+                key=lambda a: (modificacao_do_arquivo(a) or _SEM_DATA, a.name)
+            )
+        return arquivos
 
     def load(
         self,
@@ -214,174 +193,84 @@ class SidraAdapter(BaseSourceAdapter):
         source_path: Path | None = None,
         **kwargs: Any,
     ) -> int:
-        if source_path is not None and Path(source_path).is_dir():
-            return self._load_directory(conn, Path(source_path), **kwargs)
+        """Carrega um arquivo, a pasta de uma tabela ou a raiz do bruto.
 
-        table_id = kwargs.get("table_id")
-        if table_id is None:
-            if source_path is not None:
-                table_id = _id_da_tabela(source_path)
-                if table_id is None:
-                    m = re.search(r"\d+", source_path.stem)
-                    table_id = m.group(0) if m else source_path.stem
-            else:
-                table_id = kwargs.get("particao", "0")
+        Args:
+            source_path: arquivo de dados, pasta ``t-<id>`` ou raiz do bruto.
+            all_partitions: ``--all``; numa pasta, a versão vigente de cada consulta.
+            table: ``--table <id>``; só essa tabela.
+            historico: ``--historico``; todas as versões de cada consulta, em ordem
+                de data (reconstrói a história a partir do bruto).
+            force: ``--force``; substitui a versão do mesmo arquivo mesmo com o
+                mesmo ``sha256``.
+            recriar: ``--recriar``; renomeia o ``dados`` do esquema antigo (0.3.x)
+                para ``dados_legado_v0`` e cria o esquema novo.
 
-        table_id_str = str(table_id)
-        filename = kwargs.get("filename") or (
-            source_path.name if source_path else f"table_{table_id_str}.json"
+        Returns:
+            Observações inseridas (0 quando todos os arquivos já estavam carregados).
+        """
+        if source_path is None:
+            raise ValueError(
+                "informe -s/--source-path: um arquivo de dados, a pasta t-<id> ou a "
+                "raiz do bruto do SIDRA."
+            )
+        caminho = Path(source_path)
+        force = bool(kwargs.get("force"))
+        if caminho.is_dir():
+            tabela = kwargs.get("table")
+            arquivos = self._arquivos_vigentes(
+                caminho,
+                str(tabela) if tabela else None,
+                all_partitions=bool(kwargs.get("all_partitions") or kwargs.get("all")),
+                historico=bool(kwargs.get("historico")),
+            )
+        elif caminho.is_file():
+            arquivos = [caminho]
+        else:
+            raise ValueError(f"{caminho} não existe.")
+        preparar_esquema(conn, self.schema, recriar=bool(kwargs.get("recriar")))
+        carregador = Carregador(conn, self.schema, atomic=self.atomic_file)
+        total = 0
+        for arquivo in arquivos:
+            total += self._carregar_arquivo(conn, carregador, arquivo, force=force)
+        return total
+
+    def _carregar_arquivo(
+        self,
+        conn: psycopg.Connection,
+        carregador: Carregador,
+        arquivo: Path,
+        *,
+        force: bool,
+    ) -> int:
+        tabela = _tabela_do_arquivo(arquivo)
+        carregar, digest = self.should_load_file(
+            conn, arquivo, particao=tabela, force=force
         )
-
-        if is_file_loaded(
-            conn,
-            schema=self.schema,
-            filename=filename,
-            dataset=self.domain,
-            particao=table_id_str,
-        ):
+        if not carregar:
             logger.info(
                 "Tabela SIDRA %s (%s) já carregada em %s.arquivo_carregado. Pulando.",
-                table_id_str,
-                filename,
+                tabela,
+                arquivo.name,
                 self.schema,
             )
             return 0
-
-        self._ensure_tables(conn)
-
-        raw_items = kwargs.get("dados_rows") or kwargs.get("rows") or kwargs.get("data")
-        if raw_items is None and source_path is not None and source_path.exists():
-            with open(source_path, encoding="utf-8") as f:
-                parsed_json = json.load(f)
-            if isinstance(parsed_json, dict):
-                raw_items = (
-                    parsed_json.get("dados_rows")
-                    or parsed_json.get("dados")
-                    or parsed_json.get("rows")
-                    or parsed_json.get("data")
-                    or [parsed_json]
-                )
-            elif isinstance(parsed_json, list):
-                raw_items = parsed_json
-
-        raw_items = raw_items or []
-        if (
-            raw_items
-            and isinstance(raw_items[0], dict)
-            and raw_items[0].get("NC") == "Nível Territorial (Código)"
-        ):
-            raw_items = raw_items[1:]
-
-        # Data da fonte: o campo do próprio item (se vier), senão a do arquivo
-        # (sidecar ou carimbo do nome). Sem nenhuma, NULL: nunca um valor fixo.
-        if "modificacao" in kwargs:
-            modificacao_arquivo = _parse_modificacao(
-                kwargs["modificacao"], origem="o argumento modificacao"
+        lido = ler_arquivo(arquivo)
+        if str(lido.tabela_id) != tabela:
+            raise SidraFonteError(
+                f"{arquivo}: o nome diz tabela {tabela}, os metadados dizem "
+                f"{lido.tabela_id}."
             )
-        elif source_path is not None and Path(source_path).is_file():
-            modificacao_arquivo = modificacao_do_arquivo(Path(source_path))
-        else:
-            modificacao_arquivo = None
-
-        def modificacao_do(item: dict[str, Any]) -> dt.date | None:
-            if "modificacao" in item:
-                return _parse_modificacao(
-                    item["modificacao"], origem=f"um item da tabela {table_id_str}"
-                )
-            return modificacao_arquivo
-
-        formatted_rows: list[tuple[Any, ...]] = []
-        for item in raw_items:
-            if isinstance(item, (list, tuple)):
-                if len(item) == 7:
-                    formatted_rows.append(tuple(item))
-                elif len(item) == 5:
-                    formatted_rows.append(
-                        (
-                            item[0],
-                            item[1],
-                            item[2],
-                            item[3],
-                            modificacao_arquivo,
-                            True,
-                            str(item[4]),
-                        )
-                    )
-            elif isinstance(item, dict):
-                if "tabela_sidra_id" in item:
-                    formatted_rows.append(
-                        (
-                            str(item.get("tabela_sidra_id", table_id_str)),
-                            int(item.get("localidade_id", 0)),
-                            int(item.get("dimensao_id", 0)),
-                            int(item.get("periodo_id", 0)),
-                            modificacao_do(item),
-                            bool(item.get("ativo", True)),
-                            str(item.get("v", "")),
-                        )
-                    )
-                else:
-                    v_val = str(item.get("V", item.get("v", "")))
-                    loc_id = (
-                        int(item.get("D1C", 0))
-                        if str(item.get("D1C", "")).isdigit()
-                        else 0
-                    )
-                    dim_id = (
-                        int(item.get("D2C", 0))
-                        if str(item.get("D2C", "")).isdigit()
-                        else 0
-                    )
-                    per_id = (
-                        int(item.get("D3C", 0))
-                        if str(item.get("D3C", "")).isdigit()
-                        else 0
-                    )
-                    formatted_rows.append(
-                        (
-                            table_id_str,
-                            loc_id,
-                            dim_id,
-                            per_id,
-                            modificacao_do(item),
-                            True,
-                            v_val,
-                        )
-                    )
-
-        cols = [
-            "tabela_sidra_id",
-            "localidade_id",
-            "dimensao_id",
-            "periodo_id",
-            "modificacao",
-            "ativo",
-            "v",
-        ]
-        with self.atomic_file(
-            conn,
-            filename=filename,
-            dataset=self.domain,
-            particao=table_id_str,
-        ):
-            if formatted_rows:
-                rows_loaded = copy_from_rows(
-                    conn,
-                    schema=self.schema,
-                    table="dados",
-                    columns=cols,
-                    rows=formatted_rows,
-                )
-            else:
-                rows_loaded = 0
-
-            record_loaded_file(
-                conn,
-                schema=self.schema,
-                filename=filename,
-                dataset=self.domain,
-                rows_loaded=rows_loaded,
-                particao=table_id_str,
-                metadata={"tabela_sidra_id": table_id_str},
-            )
-        return rows_loaded
+        res = carregador.carregar(
+            lido,
+            filename=arquivo.name,
+            sha256=digest,
+            modificacao=modificacao_do_arquivo(arquivo),
+        )
+        logger.info(
+            "SIDRA %s: %d observação(ões)%s.",
+            arquivo.name,
+            res.linhas,
+            " (versão substituída)" if res.substituiu else "",
+        )
+        return res.linhas

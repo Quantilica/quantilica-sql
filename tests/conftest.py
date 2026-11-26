@@ -109,3 +109,19 @@ def pg_schema(pg_url):
         sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema))
     )
     conn.close()
+
+
+@pytest.fixture
+def pg(pg_schema):
+    """``(adaptador do SIDRA, conexão, schema)``: o adaptador grava no schema de
+    teste, não em ``ibge_sidra``."""
+    from quantilica_sql.adapters.sidra import SidraAdapter
+
+    conn, schema = pg_schema
+
+    class _Sidra(SidraAdapter):
+        @property
+        def schema(self) -> str:
+            return schema
+
+    return _Sidra(), conn, schema

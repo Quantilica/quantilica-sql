@@ -12,6 +12,7 @@ import uuid
 import pytest
 
 from quantilica_sql.sidra.esquema import (
+    FUNCOES,
     TABELA_ANTIGA,
     TABELAS,
     VIEWS,
@@ -95,6 +96,15 @@ def test_ddl_criar_duas_vezes_nao_falha_e_bate_com_o_adr(pg_schema):
     }
     assert tabelas == set(TABELAS)
     assert views == set(VIEWS)
+    funcoes = {
+        r[0]
+        for r in conn.execute(
+            "SELECT routine_name FROM information_schema.routines "
+            "WHERE routine_schema = %s",
+            (schema,),
+        )
+    }
+    assert funcoes == set(FUNCOES)
     obs = _colunas(conn, schema, "observacao")
     assert obs == {
         "versao_id": "integer",
