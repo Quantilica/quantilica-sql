@@ -5,7 +5,7 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.4.1] - 2026-11-26
 
 ### Adicionado
 - **BCB SGS: `series_metadata` criada e preenchida pelo adaptador `bcb`.** Antes nenhum adaptador criava essa tabela, que as SQL de `macro/*` e `setorial/*` do `quantilica-pipelines` juntam a `series_data` (`name`, `name_abbreviated`, `unit`, `frequency`, `theme_hierarchy`): em banco novo, `load bcb-sgs --all` seguido de `quantilica sql run macro/bcb_precos` falhava com `relation "series_metadata" does not exist`, e o `scaffold -t bcb` gerava um SQL com o mesmo defeito. Agora `load bcb --all` (ou `--table <id>`) carrega as observações **e** os metadados do bruto do `bcb-sgs-fetcher` (`bcb-sgs_AAAA-MM/metadata/<id>.json`, `{"basic", "full"}`; a pasta `data/` ou uma pasta mensal também servem, e o `<id>_basic.json` é aceito). Um arquivo de metadados sozinho também carrega (`load bcb -s .../000433.json`).
