@@ -94,30 +94,46 @@ def _render_sql(name: str, pipeline_type: PipelineType) -> str:
     """Template SQL com query padrão por tipo de pipeline."""
     if pipeline_type == "ibge":
         return f"""-- Pipeline IBGE/SIDRA: {name}
--- Wide/pivot: variáveis SIDRA viram colunas
--- Substitua esta query pelo SQL específico do seu pipeline
+-- Lê a superfície do schema ibge_sidra criado por `quantilica sql load sidra`
+-- (dados, periodo, dimensao, localidade); o runner coloca o schema no search_path.
+--   dados      uma linha por célula; `v` é texto (número ou símbolo do IBGE) e
+--              `ativo` marca a versão vigente (consulta no tempo: dados_em(data))
+--   periodo    data_inicio, ano, mes, trimestre, frequencia
+--   localidade nc/nn = nível territorial, d1c/d1n = código e nome da localidade
+--   dimensao   mc/mn = unidade, d2c/d2n = variável, d4c/d4n... = classificações,
+--              na ordem das classificações da tabela
+-- Wide/pivot: variáveis do SIDRA viram colunas. Substitua pelo SQL do seu pipeline.
 
 SELECT
-    td.date,
-    td.localidade_id,
-    td.localidade_nome,
-    td.classificacao_id,
-    td.classificacao_nome,
-    MAX(CASE WHEN td.variable = '63' THEN td.value END)::float8 AS variavel_63,
-    MAX(CASE WHEN td.variable = '66' THEN td.value END)::float8 AS variavel_66
-FROM ibge_sidra.tabela_data td
-WHERE td.tabela_sidra_id = '1419'
-  AND td.ativo = TRUE
+    p.data_inicio AS periodo,
+    l.nc AS nivel_territorial_id,
+    l.nn AS nivel_territorial,
+    l.d1c AS localidade_id,
+    l.d1n AS localidade,
+    dim.d4c AS classificacao_id,
+    dim.d4n AS classificacao,
+    MAX(CASE WHEN dim.d2c = '63' AND d.v ~ '^-?[0-9]' THEN d.v::numeric END)::float8
+        AS variavel_63,
+    MAX(CASE WHEN dim.d2c = '66' AND d.v ~ '^-?[0-9]' THEN d.v::numeric END)::float8
+        AS variavel_66
+FROM dados d
+JOIN periodo p ON d.periodo_id = p.id
+JOIN dimensao dim ON d.dimensao_id = dim.id
+JOIN localidade l ON d.localidade_id = l.id
+WHERE d.tabela_sidra_id = '1419'
+  AND d.ativo = TRUE
 GROUP BY
-    td.date,
-    td.localidade_id,
-    td.localidade_nome,
-    td.classificacao_id,
-    td.classificacao_nome
+    p.data_inicio,
+    l.nc,
+    l.nn,
+    l.d1c,
+    l.d1n,
+    dim.d4c,
+    dim.d4n
 ORDER BY
-    td.date,
-    td.localidade_id,
-    td.classificacao_id;
+    p.data_inicio,
+    l.d1c,
+    dim.d4c;
 """
     elif pipeline_type == "bcb":
         return f"""-- Pipeline BCB SGS: {name}

@@ -118,6 +118,19 @@ def test_entrada_arquivo_unico_usa_o_id_do_nome(bruto):
     assert [r[2] for r in state.recorded] == ["433"]
 
 
+def test_bcb_sgs_e_alias_do_adaptador_bcb():
+    """``load bcb-sgs`` resolve para o mesmo adaptador (domínio ``bcb``, schema
+    ``bcb_sgs``) e o alias aparece na lista de domínios da CLI."""
+    from quantilica_sql.adapters import list_supported_domains
+    from quantilica_sql.adapters.bcb import BcbAdapter
+
+    for nome in ("bcb", "bcb-sgs", " BCB-SGS "):
+        adapter = get_adapter(nome)
+        assert isinstance(adapter, BcbAdapter)
+        assert (adapter.domain, adapter.schema) == ("bcb", "bcb_sgs")
+    assert "bcb-sgs" in list_supported_domains()
+
+
 def test_entrada_arquivo_inexistente_falha_em_vez_de_registrar_zero_linhas(tmp_path):
     state = MockDbState()
     with pytest.raises(FileNotFoundError):
@@ -125,7 +138,9 @@ def test_entrada_arquivo_inexistente_falha_em_vez_de_registrar_zero_linhas(tmp_p
     assert state.recorded == []
 
 
-def test_entrada_cli_com_pasta_e_all_sai_com_zero(bruto, monkeypatch):
+@pytest.mark.parametrize("dominio", ["bcb", "bcb-sgs"])
+def test_entrada_cli_com_pasta_e_all_sai_com_zero(bruto, monkeypatch, dominio):
+    """``bcb-sgs`` (o nome da fonte e o que a documentação usa) é alias de ``bcb``."""
     from typer.testing import CliRunner
 
     from quantilica_sql import cli
@@ -142,10 +157,10 @@ def test_entrada_cli_com_pasta_e_all_sai_com_zero(bruto, monkeypatch):
 
     monkeypatch.setattr(cli, "get_connection", lambda **kw: _Ctx())
     runner = CliRunner()
-    ok = runner.invoke(cli.app, ["load", "bcb", "-s", str(bruto), "--all"])
+    ok = runner.invoke(cli.app, ["load", dominio, "-s", str(bruto), "--all"])
     assert ok.exit_code == 0, ok.output
     assert len(state.recorded) == 2
-    falha = runner.invoke(cli.app, ["load", "bcb", "-s", str(bruto)])
+    falha = runner.invoke(cli.app, ["load", dominio, "-s", str(bruto)])
     assert falha.exit_code == 1
     assert "--all" in falha.output
 

@@ -51,6 +51,33 @@ def test_scaffold_pipeline_ibge(tmp_path: Path):
     assert "ibge_sidra" in sql_content.lower()
 
 
+def test_scaffold_ibge_nao_aponta_para_tabela_que_nao_existe(tmp_path: Path):
+    """O SQL gerado lê a superfície real do SIDRA (`dados`, `periodo`, `dimensao`,
+    `localidade`), não `ibge_sidra.tabela_data`, que nunca existiu."""
+    sql_text = (
+        scaffold_pipeline(tmp_path, "meu_ipca", pipeline_type="ibge") / "meu_ipca.sql"
+    ).read_text(encoding="utf-8")
+    assert "tabela_data" not in sql_text
+    for nome in ("dados", "periodo", "dimensao", "localidade"):
+        assert f" {nome} " in sql_text or f"FROM {nome} " in sql_text
+
+
+def test_scaffold_ibge_sql_passa_no_explain_contra_o_esquema_real(pg_schema, tmp_path):
+    """O SQL gerado resolve contra o esquema que `load sidra` cria (vazio), com o
+    schema no `search_path` como o runner faz para um fetch.toml com `[[tabelas]]`."""
+    from psycopg import sql as psql
+
+    from quantilica_sql.runner import infer_raw_schema
+    from quantilica_sql.sidra.esquema import criar_esquema
+
+    conn, schema = pg_schema
+    criar_esquema(conn, schema)
+    pipeline = scaffold_pipeline(tmp_path, "meu_ipca", pipeline_type="ibge")
+    assert infer_raw_schema(pipeline) == "ibge_sidra"  # o schema que o runner usaria
+    conn.execute(psql.SQL("SET search_path TO {}").format(psql.Identifier(schema)))
+    conn.execute("EXPLAIN " + (pipeline / "meu_ipca.sql").read_text(encoding="utf-8"))
+
+
 def test_scaffold_pipeline_bcb(tmp_path: Path):
     """Valida scaffold de pipeline tipo 'bcb'."""
     path = scaffold_pipeline(tmp_path, "minhas_taxas", pipeline_type="bcb")
