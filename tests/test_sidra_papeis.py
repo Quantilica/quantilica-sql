@@ -95,7 +95,11 @@ def _copia_1086(tmp_path: Path) -> Path:
     origem = DADOS / "t-1086"
     destino = tmp_path / "t-1086"
     shutil.copytree(origem, destino)
-    return destino / next(p.name for p in origem.glob("t-1086_*@*.json"))
+    return destino / next(
+        p.name
+        for p in sorted(origem.glob("t-1086_*@*.json"))
+        if not p.name.endswith(".manifest.json")
+    )
 
 
 def test_erro_divergencia_entre_url_e_cabecalho(tmp_path):
@@ -192,5 +196,5 @@ def test_erro_territorio_que_nao_confere_com_nc_nn(tmp_path):
 
 
 def test_metadados_vigente_na_pasta_do_arquivo():
-    meta = ler_metadados(next((DADOS / "t-1086").glob("metadados@*.json")))
+    meta = ler_metadados(next((DADOS / "t-1086").glob("metadados@????????.json")))
     assert meta.tabela_id == 1086
