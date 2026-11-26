@@ -127,6 +127,25 @@ def test_ddl_criar_duas_vezes_nao_falha_e_bate_com_o_adr(pg_schema):
     assert set(_colunas(conn, schema, "arquivo_carregado")) >= {"sha256", "dataset"}
 
 
+def test_ddl_esquema_marcado_nao_reexecuta_a_ddl_e_forcar_refaz(pg_schema):
+    conn, schema = pg_schema
+    criar_esquema(conn, schema)
+    conn.execute(f'DROP VIEW "{schema}".observacao_plana')
+    criar_esquema(conn, schema)  # marcado: não mexe (o papel pode não ser o dono)
+    assert _relkind(conn, schema, "observacao_plana") is None
+    criar_esquema(conn, schema, forcar=True)
+    assert _relkind(conn, schema, "observacao_plana") == "v"
+
+
+def _relkind(conn, schema, nome):
+    row = conn.execute(
+        "SELECT c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE n.nspname = %s AND c.relname = %s",
+        (schema, nome),
+    ).fetchone()
+    return None if row is None else row[0]
+
+
 def test_ddl_valor_ou_simbolo_e_unico_entre_as_ativas_e_versao_tem_indice(pg_schema):
     import psycopg
 

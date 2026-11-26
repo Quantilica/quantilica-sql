@@ -38,6 +38,8 @@ logger = logging.getLogger("quantilica_sql.sidra.esquema")
 
 DATASET = "sidra"  # ``dataset`` do ledger ``arquivo_carregado``
 TABELA_ANTIGA = "dados_legado_v0"
+ESQUEMA_VERSAO = 1  # sobe quando a DDL muda; fica no COMMENT de ``tabela``
+_MARCA = f"quantilica-sql:sidra:esquema:v{ESQUEMA_VERSAO}"
 MAX_CLASSIFICACOES_NA_VIEW = 6  # d4..d9, o limite que o portal já declara
 
 TABELAS = (
@@ -317,20 +319,47 @@ def mensagem_esquema_antigo(schema: str) -> str:
     )
 
 
-def criar_esquema(conn: psycopg.Connection, schema: str) -> None:
+def _versao_marcada(conn: psycopg.Connection, schema: str) -> bool:
+    """O schema já tem o esquema desta versão (marca no ``COMMENT`` de ``tabela``)?"""
+    if _relkind(conn, schema, "tabela") != "r":
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT obj_description(c.oid, 'pg_class') FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = %s AND c.relname = 'tabela'",
+            (schema,),
+        )
+        row = cur.fetchone()
+    return row is not None and row[0] == _MARCA
+
+
+def criar_esquema(
+    conn: psycopg.Connection, schema: str, *, forcar: bool = False
+) -> None:
     """Cria o esquema do SIDRA (idempotente) e o ledger ``arquivo_carregado``.
 
     Só ``CREATE SCHEMA`` quando o schema falta; as demais DDL pedem ``CREATE`` no
-    schema, nunca no banco. Dentro de ``atomic_file_load`` não commita.
+    schema, nunca no banco. Um schema já criado nesta versão do esquema (marca no
+    ``COMMENT`` de ``tabela``) não reexecuta a DDL, o que também permite a um papel
+    sem posse das views carregar; ``forcar`` reexecuta. Dentro de
+    ``atomic_file_load`` não commita.
     """
     if esquema_antigo(conn, schema):
         raise EsquemaAntigoError(mensagem_esquema_antigo(schema))
     ensure_schema(conn, schema)
     ensure_tracker_table(conn, schema)
+    if not forcar and _versao_marcada(conn, schema):
+        return
     ident = sql.Identifier(schema)
     with conn.cursor() as cur:
         cur.execute(sql.SQL(_DDL_TABELAS).format(s=ident))
         cur.execute(sql.SQL(_DDL_VIEWS).format(s=ident))
+        cur.execute(
+            sql.SQL("COMMENT ON TABLE {} IS {}").format(
+                sql.Identifier(schema, "tabela"), sql.Literal(_MARCA)
+            )
+        )
     commit_if_standalone(conn)
 
 
