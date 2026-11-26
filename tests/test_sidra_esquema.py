@@ -268,6 +268,20 @@ def test_legado_dados_sem_modificacao_nao_junta_versao(pg_schema):
     assert "versao" in com
 
 
+def test_legado_filtro_por_tabela_sidra_id_pode_usar_o_indice_brin(pg_schema):
+    conn, schema = pg_schema
+    criar_esquema(conn, schema)
+    popula(conn, schema)
+    conn.execute("SET enable_seqscan = off")
+    plano = "\n".join(
+        r[0]
+        for r in conn.execute(
+            f"EXPLAIN SELECT v FROM \"{schema}\".dados WHERE tabela_sidra_id IN ('7060')"
+        )
+    )
+    assert "observacao_tabela_brin" in plano
+
+
 def test_legado_dimensao_com_seis_classificacoes(pg_schema):
     conn, schema = pg_schema
     criar_esquema(conn, schema)

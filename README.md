@@ -20,6 +20,10 @@ uv add quantilica-sql --index https://index.quantilica.com/simple/
 uv add "quantilica-sql[analysis]" --index https://index.quantilica.com/simple/
 ```
 
+## Requisitos
+
+PostgreSQL 12 ou mais novo (o esquema do SIDRA usa colunas geradas `STORED`); os testes rodam no 16 e no 18. A DDL só pede `CREATE` no schema, nunca no banco: o papel da aplicação precisa de `USAGE` e `CREATE` no schema (ou ser o dono dele).
+
 ## Uso
 
 ### Execução via `quantilica-cli`
@@ -33,6 +37,13 @@ quantilica sql run macro/ipca
 # Carga sob demanda de uma partição
 quantilica sql load rfb --competencia 2023-10
 quantilica sql load pdet -s ./data/pdet
+
+# SIDRA: a raiz do bruto do ibge-sidra (t-<id>/...); só a versão vigente de cada consulta
+quantilica sql load sidra -s ./data/ibge-sidra --all
+quantilica sql load sidra -s ./data/ibge-sidra --table 1737        # uma tabela
+quantilica sql load sidra -s ./data/ibge-sidra --all --historico   # todas as versões, em ordem de data
+quantilica sql load sidra -s ./data/ibge-sidra --all --force       # recarrega mesmo com o mesmo sha256
+quantilica sql load sidra -s ./data/ibge-sidra --all --recriar     # só para sair do esquema 0.3.x
 
 # Gestão de catálogos e plugins
 quantilica sql plugin list
@@ -50,6 +61,22 @@ quantilica-sql run macro/ipca
 - **Schemas por Fonte:** `anp`, `bcb_sgs`, `cvm`, `inmet`, `pdet`, `rfb_cnpj`, `ibge_sidra`, etc.
 - **Camada Analítica / Data Marts:** `analytics`.
 - **Rastreabilidade de Idempotência:** `{schema}.arquivo_carregado`.
+
+## SIDRA (`ibge_sidra`)
+
+Modelo estrela em formato longo. O papel de cada dimensão `D1..Dn` do arquivo vem da URL do sidecar `.manifest.json` e dos `metadados@AAAAMMDD.json` da tabela (nunca da posição: o SIDRA numera na ordem da URL); divergência ou falta de metadados é erro claro.
+
+| Objeto | O que é |
+|---|---|
+| `observacao` | fato: uma linha por célula e versão (`valor` numérico exato ou `simbolo`: `-`, `..`, `...`, `X`, `Z`), `ativo` marca a vigente |
+| `serie` + `serie_categoria` | variável, unidade e categorias das N classificações (a ponte fica na série, não no fato) |
+| `tabela`, `variavel`, `classificacao`, `categoria`, `localidade`, `periodo` | dimensões (a categoria é por tabela) |
+| `versao` | um arquivo = uma versão (`consulta`, `modificacao`, `sha256`) |
+| `dados`, `dimensao` (views), `localidade`, `periodo` | superfície das consultas do catálogo (`dados.v` é o texto do valor ou do símbolo) |
+| `observacao_plana` (view) | os nomes, com as categorias em JSONB, sem JOIN |
+| `dados_em(data)` (função) | o que valia numa data: a versão de maior `modificacao` até ela em cada célula |
+
+Uma revisão do IBGE (arquivo `@data_nova` da mesma consulta) vira versão nova; a antiga fica como história. Só uma observação por célula é `ativo`: a da maior `modificacao`. A consulta "o que valia em D" é `dados_em(D)`; `modificacao <= D AND ativo` descarta o que foi revisado depois de D e não serve.
 
 ## Lake de Parquet (extra `lake`)
 

@@ -158,14 +158,17 @@ CREATE TABLE IF NOT EXISTS {s}.versao (
     arquivo      text        NOT NULL,
     sha256       text,
     linhas       bigint      NOT NULL DEFAULT 0,
+    periodo_ids  integer[]   NOT NULL DEFAULT '{{}}'::integer[],
     carregado_em timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (tabela_id, arquivo)
 );
 CREATE INDEX IF NOT EXISTS versao_consulta_idx
     ON {s}.versao (tabela_id, consulta);
 
+-- Sem chaves estrangeiras no fato: a FK de versao_id mais que dobra o custo do
+-- INSERT (medido); a integridade é do carregador (uma transação por arquivo).
 CREATE TABLE IF NOT EXISTS {s}.observacao (
-    versao_id     integer NOT NULL REFERENCES {s}.versao (id),
+    versao_id     integer NOT NULL,
     tabela_id     integer NOT NULL,
     serie_id      integer NOT NULL,
     localidade_id integer NOT NULL,
@@ -180,6 +183,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS observacao_ativa_uq
     ON {s}.observacao (serie_id, localidade_id, periodo_id) WHERE ativo;
 CREATE INDEX IF NOT EXISTS observacao_versao_idx
     ON {s}.observacao (versao_id);
+-- As SQL do catálogo filtram por ``tabela_sidra_id`` (texto, a view de ``dados``):
+-- um BRIN sobre a mesma expressão as serve (as tabelas entram em blocos contíguos)
+-- sem custo mensurável na carga.
+CREATE INDEX IF NOT EXISTS observacao_tabela_brin
+    ON {s}.observacao USING brin ((tabela_id::text));
 """
 
 

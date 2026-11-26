@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from operator import itemgetter
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -69,6 +70,9 @@ class ArquivoSidra:
     metadados: Metadados
     papeis: list[Papel]
     celulas: list[Celula] = field(repr=False)
+    series: frozenset[Serie] = field(default=frozenset(), repr=False)
+    localidades: frozenset[LocalidadeCelula] = field(default=frozenset(), repr=False)
+    periodos: frozenset[str] = field(default=frozenset(), repr=False)
 
 
 def _inteiro(texto: str, *, onde: str) -> int:
@@ -124,45 +128,55 @@ def ler_arquivo(caminho: Path, metadados: Metadados | None = None) -> ArquivoSid
     cols_cat = [(cid, f"D{i}C", f"D{i}N") for _ordem, i, cid in cats]
     kt_c, kt_n, kv_c, kv_n, kp_c = f"D{t}C", f"D{t}N", f"D{v}C", f"D{v}N", f"D{p}C"
 
+    get_serie = itemgetter(
+        kv_c, kv_n, "MC", "MN", *(k for _c, kc, kn in cols_cat for k in (kc, kn))
+    )
+    get_loc = itemgetter("NC", "NN", kt_c, kt_n)
+    get_valor_periodo = itemgetter("V", kp_c)
     cache_serie: dict[tuple[str, ...], Serie] = {}
     cache_loc: dict[tuple[str, str, str, str], LocalidadeCelula] = {}
+    periodos: set[str] = set()
     celulas: list[Celula] = []
+    junta = celulas.append
     for n, r in enumerate(linhas[1:], 2):
         try:
-            chave = (
-                r[kv_c],
-                r[kv_n],
-                r["MC"],
-                r["MN"],
-                *(x for _c, kc, kn in cols_cat for x in (r[kc], r[kn])),
-            )
+            chave = get_serie(r)
             serie = cache_serie.get(chave)
             if serie is None:
                 onde = f"{origem} (linha {n})"
                 serie = cache_serie[chave] = Serie(
-                    _inteiro(r[kv_c], onde=onde),
-                    r[kv_n],
-                    r["MC"],
-                    r["MN"],
+                    _inteiro(chave[0], onde=onde),
+                    chave[1],
+                    chave[2],
+                    chave[3],
                     tuple(
-                        (cid, _inteiro(r[kc], onde=onde), r[kn])
-                        for cid, kc, kn in cols_cat
+                        (cid, _inteiro(chave[4 + 2 * k], onde=onde), chave[5 + 2 * k])
+                        for k, (cid, _kc, _kn) in enumerate(cols_cat)
                     ),
                 )
-            lk = (r["NC"], r["NN"], r[kt_c], r[kt_n])
+            lk = get_loc(r)
             loc = cache_loc.get(lk)
             if loc is None:
                 loc = cache_loc[lk] = LocalidadeCelula(*lk)
-            valor, simbolo = converter_valor(r["V"], origem=f"{origem} (linha {n})")
-            celulas.append(Celula(serie, loc, r[kp_c], valor, simbolo))
+            texto, periodo = get_valor_periodo(r)
         except KeyError as exc:
             raise SidraFonteError(
                 f"{origem} (linha {n}): falta o campo {exc.args[0]!r}"
             ) from exc
+        try:
+            valor, simbolo = converter_valor(texto)
+        except SidraFonteError:
+            converter_valor(texto, origem=f"{origem} (linha {n})")  # com a linha
+            raise
+        periodos.add(periodo)
+        junta(Celula(serie, loc, periodo, valor, simbolo))
     return ArquivoSidra(
         caminho=caminho,
         tabela_id=metadados.tabela_id,
         metadados=metadados,
         papeis=papeis,
         celulas=celulas,
+        series=frozenset(cache_serie.values()),
+        localidades=frozenset(cache_loc.values()),
+        periodos=frozenset(periodos),
     )

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from operator import itemgetter
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -156,7 +157,7 @@ def papeis_por_cabecalho(
                 )
             papeis.append(candidatos[0])
             continue
-        codigos = {r[f"D{i}C"] for r in dados}
+        codigos = set(map(itemgetter(f"D{i}C"), dados))
         if codigos <= periodos:
             papeis.append(Papel(PERIODO))
         else:
@@ -201,7 +202,7 @@ def _confere_territorio(
     todo par (``NC``, ``D<i>C``) é uma localidade dos metadados.
     """
     nome = cabecalho.get(f"D{i}N") or ""
-    nomes = {r["NN"] for r in dados}
+    nomes = set(map(itemgetter("NN"), dados))
     if all(n in nome for n in nomes):
         return
     conhecidas = {(loc.nivel_codigo, loc.codigo) for loc in metadados.localidades}

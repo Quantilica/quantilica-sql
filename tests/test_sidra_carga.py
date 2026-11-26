@@ -613,6 +613,23 @@ def test_atomico_falha_no_meio_da_carga_desfaz_tudo_e_o_cache_nao_sobrevive(
     assert _um(conn, schema, "SELECT count(*) FROM {s}.observacao") == 12
 
 
+def test_atomico_celula_repetida_no_arquivo_da_erro_claro_e_nao_deixa_nada(
+    pg, tmp_path
+):
+    from quantilica_sql.sidra import SidraFonteError
+
+    adapter, conn, schema = pg
+    raiz = copia_tabelas(tmp_path / "bruto", "1737")
+    arq = arquivo_de_dados(raiz, "1737")
+    linhas = json.loads(arq.read_text(encoding="utf-8"))
+    linhas.append(dict(linhas[1]))  # a mesma célula duas vezes
+    arq.write_text(json.dumps(linhas), encoding="utf-8")
+    remove_sidecar(arq)
+    with pytest.raises(SidraFonteError, match="célula repetida"):
+        adapter.load(conn, arq)
+    _vazio(conn, schema)
+
+
 def test_atomico_arquivo_com_falha_nao_impede_o_anterior_ja_confirmado(pg, tmp_path):
     from quantilica_sql.sidra import SidraFonteError
 

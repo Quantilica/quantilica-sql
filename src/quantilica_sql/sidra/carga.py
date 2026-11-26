@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
+import psycopg.errors
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
@@ -146,6 +147,14 @@ class Carregador:
                         "empates_divergentes": res.empates_divergentes,
                     },
                 )
+        except psycopg.errors.UniqueViolation as exc:
+            self._descartar()
+            if exc.diag.constraint_name != "observacao_ativa_uq":
+                raise
+            raise SidraFonteError(
+                f"{filename}: célula repetida no arquivo (mesma série, localidade e "
+                f"período mais de uma vez): {exc}"
+            ) from exc
         except BaseException:
             self._descartar()
             raise
@@ -185,7 +194,7 @@ class Carregador:
         )
         self._garantir_tabela(meta)
         self._garantir_dimensoes(lido)
-        linhas = self._resolver(lido)
+        serie_id, loc_id, per_id = self._resolver(lido)
         consulta = consulta_do_nome(filename)
 
         self._exec(f"DROP TABLE IF EXISTS pg_temp.{_STAGE}")
@@ -200,13 +209,30 @@ class Carregador:
                 f"COPY {_STAGE} (serie_id, localidade_id, periodo_id, valor, simbolo) "
                 "FROM STDIN"
             ) as copy:
-                for linha in linhas:
-                    copy.write_row(linha)
+                write_row = copy.write_row
+                for c in lido.celulas:
+                    write_row(
+                        (
+                            serie_id[c.serie],
+                            loc_id[c.localidade],
+                            per_id[c.periodo],
+                            c.valor,
+                            c.simbolo,
+                        )
+                    )
 
         versao_id, substituiu = self._abrir_versao(
-            tid, consulta, modificacao, filename, sha256, len(linhas)
+            tid,
+            consulta,
+            modificacao,
+            filename,
+            sha256,
+            len(lido.celulas),
+            sorted(per_id.values()),
         )
-        empates = self._vigencia(tid, versao_id, consulta, modificacao)
+        empates = self._vigencia(
+            tid, versao_id, consulta, modificacao, sorted(per_id.values())
+        )
         self._exec(
             "INSERT INTO {s}.observacao (versao_id, tabela_id, serie_id, "
             "localidade_id, periodo_id, valor, simbolo, ativo) "
@@ -225,7 +251,7 @@ class Carregador:
                 filename,
                 empates,
             )
-        return ResultadoArquivo(versao_id, len(linhas), substituiu, empates)
+        return ResultadoArquivo(versao_id, len(lido.celulas), substituiu, empates)
 
     # ----------------------------------------------------------- dimensões
     def _garantir_tabela(self, meta: Metadados) -> None:
@@ -296,7 +322,7 @@ class Carregador:
         tid = lido.tabela_id
         variaveis: dict[int, str] = {}
         categorias: dict[tuple[int, int], str] = {}
-        for serie in {c.serie for c in lido.celulas}:
+        for serie in lido.series:
             variaveis[serie.variavel_id] = serie.variavel_nome
             for cid, catid, nome in serie.categorias:
                 categorias[(cid, catid)] = nome
@@ -320,9 +346,11 @@ class Carregador:
                 ),
             )
 
-    def _resolver(self, lido: ArquivoSidra) -> list[tuple]:
-        """Resolve localidade, período e série de cada célula: ``(serie, loc, per,
-        valor, simbolo)``."""
+    def _resolver(
+        self, lido: ArquivoSidra
+    ) -> tuple[dict[Any, int], dict[Any, int], dict[str, int]]:
+        """Resolve (criando o que falta) os ids de série, localidade e período
+        distintos do arquivo."""
         tid = lido.tabela_id
         meta = lido.metadados
         arq = lido.caminho.name
@@ -330,7 +358,7 @@ class Carregador:
         # localidades
         faltam = {
             loc
-            for loc in {c.localidade for c in lido.celulas}
+            for loc in lido.localidades
             if self._localidades.get((loc.nivel_codigo, loc.codigo)) is None
         }
         if faltam:
@@ -356,7 +384,7 @@ class Carregador:
                 self._localidades.set((nc, cod), id_)
 
         # períodos
-        codigos = {c.periodo for c in lido.celulas}
+        codigos = lido.periodos
         for cod in sorted(codigos):
             p = meta.periodos.get(cod)
             if p is None:
@@ -398,7 +426,7 @@ class Carregador:
         }
 
         # séries
-        distintas = {c.serie for c in lido.celulas}
+        distintas = lido.series
         chaves = {s: _chave_da_serie(s) for s in distintas}
         novas = [s for s in distintas if self._series.get((tid, chaves[s])) is None]
         if novas:
@@ -445,23 +473,11 @@ class Carregador:
             ):
                 self._series.set((tid, chave), id_)
         serie_id = {s: self._series.get((tid, chaves[s])) for s in distintas}
-
-        linhas: list[tuple] = []
-        vistas: set[tuple[int, int, int]] = set()
-        for c in lido.celulas:
-            chave = (
-                serie_id[c.serie],
-                self._localidades.get((c.localidade.nivel_codigo, c.localidade.codigo)),
-                per_id[c.periodo],
-            )
-            if chave in vistas:
-                raise SidraFonteError(
-                    f"{arq}: célula repetida no arquivo (série {c.serie.variavel_id}, "
-                    f"localidade {c.localidade.codigo}, período {c.periodo})."
-                )
-            vistas.add(chave)
-            linhas.append((*chave, c.valor, c.simbolo))
-        return linhas
+        loc_id = {
+            loc: self._localidades.get((loc.nivel_codigo, loc.codigo))
+            for loc in lido.localidades
+        }
+        return serie_id, loc_id, per_id
 
     # ------------------------------------------------------------- versão
     def _abrir_versao(
@@ -472,6 +488,7 @@ class Carregador:
         filename: str,
         sha256: str | None,
         linhas: int,
+        periodo_ids: list[int],
     ) -> tuple[int, bool]:
         """Cria a ``versao`` ou, se o arquivo já tinha uma, apaga as observações
         dela (guardando as células que ela mantinha ativas) e a atualiza."""
@@ -482,8 +499,9 @@ class Carregador:
         if row is None:
             novo = self._exec(
                 "INSERT INTO {s}.versao (tabela_id, consulta, modificacao, arquivo, "
-                "sha256, linhas) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                (tid, consulta, modificacao, filename, sha256, linhas),
+                "sha256, linhas, periodo_ids) VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id",
+                (tid, consulta, modificacao, filename, sha256, linhas, periodo_ids),
             ).fetchone()
             return novo[0], False
         vid = row[0]
@@ -500,14 +518,20 @@ class Carregador:
         )
         self._exec(
             "UPDATE {s}.versao SET consulta = %s, modificacao = %s, sha256 = %s, "
-            "linhas = %s, carregado_em = clock_timestamp() WHERE id = %s",
-            (consulta, modificacao, sha256, linhas, vid),
+            "linhas = %s, periodo_ids = %s, carregado_em = clock_timestamp() "
+            "WHERE id = %s",
+            (consulta, modificacao, sha256, linhas, periodo_ids, vid),
         )
         return vid, True
 
     # ----------------------------------------------------------- vigência
     def _vigencia(
-        self, tid: int, vid: int, consulta: str, modificacao: dt.date | None
+        self,
+        tid: int,
+        vid: int,
+        consulta: str,
+        modificacao: dt.date | None,
+        periodo_ids: list[int],
     ) -> int:
         """Marca ``ativo`` na tabela de passagem e desativa as ativas superadas.
 
@@ -534,6 +558,22 @@ class Carregador:
             f"< COALESCE(%(m)s::date, {_SEM_DATA})",
             p,
         )
+        # outra versão da tabela com período em comum? Sem ela (o caso comum: período
+        # novo) não há célula a disputar
+        if not self._exec(
+            "SELECT EXISTS (SELECT 1 FROM {s}.versao WHERE tabela_id = %s "
+            "AND id <> %s AND periodo_ids && %s::int[])",
+            (tid, vid, periodo_ids),
+        ).fetchone()[0]:
+            return 0
+        colide = self._exec(
+            f"SELECT EXISTS (SELECT 1 FROM pg_temp.{_STAGE} st "
+            "JOIN {s}.observacao o ON o.serie_id = st.serie_id "
+            "AND o.localidade_id = st.localidade_id "
+            "AND o.periodo_id = st.periodo_id AND o.ativo)"
+        ).fetchone()[0]
+        if not colide:
+            return 0
         # (B1) empate de data com valor diferente: só conta (aviso)
         empates = self._exec(
             f"SELECT count(*) FROM pg_temp.{_STAGE} st "
