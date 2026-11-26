@@ -58,7 +58,8 @@ def _render_fetch_bcb(name: str) -> str:
 ids = [432, 11, 12, 226]
 description = "Taxas de juros: SELIC-META, SELIC-OVER, CDI, TR"
 
-# Ou séries por tema
+# Ou séries por tema (o tema vem de series_metadata: carregue os metadados com
+# `quantilica sql load bcb-sgs -s <bruto> --all`)
 [[series]]
 themes = ["Taxas de juros"]
 description = "Todas as séries do tema 'Taxas de juros'"
@@ -138,6 +139,13 @@ ORDER BY
     elif pipeline_type == "bcb":
         return f"""-- Pipeline BCB SGS: {name}
 -- Query padrão para séries temporais do BCB
+-- Lê o schema bcb_sgs criado por `quantilica sql load bcb-sgs --all` (o runner o
+-- coloca no search_path):
+--   series_data      observações (date, date_end, value); `ativo` marca o valor
+--                    vigente, e o revisado fica como história
+--   series_metadata  catálogo da série (name, unit, frequency, source,
+--                    theme_hierarchy...), lido dos metadados do bruto. O INNER JOIN
+--                    abaixo só traz séries que têm metadado carregado.
 
 SELECT
     sd.date,

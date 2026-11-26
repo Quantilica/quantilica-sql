@@ -40,6 +40,7 @@ def arquivos_vigentes(
     glob: str = "*.json",
     logger: logging.Logger | None = None,
     todas_as_versoes: bool = False,
+    permitir_vazio: bool = False,
 ) -> list[Path]:
     """Arquivos de dados vigentes de uma pasta do bruto, em ordem.
 
@@ -64,6 +65,10 @@ def arquivos_vigentes(
         todas_as_versoes: ``--historico``; devolve todas as versões carimbadas de
             cada arquivo (em ordem de nome), não só a vigente. As demais regras
             (sidecars, ``*.tmp``, auxiliares, ``--table``, erros) valem igual.
+        permitir_vazio: devolve ``[]`` quando não há arquivo de dados (em vez de
+            ``ValueError``), para o adaptador que ainda tem outra coisa a carregar
+            da mesma pasta (os metadados do BCB SGS). A pasta sem ``--all`` nem
+            ``--table`` continua sendo erro.
 
     Returns:
         Caminhos absolutos (``raiz / relativo``), um por arquivo vigente.
@@ -102,7 +107,7 @@ def arquivos_vigentes(
             for a in arquivos
             if (c := chave_de(a)) is not None and normaliza_chave(c) == chave
         ]
-    if not arquivos:
+    if not arquivos and not permitir_vazio:
         alvo = f" da {nome_chave} {table}" if chave is not None else ""
         raise ValueError(
             f"nenhum arquivo de dados{alvo} do {fonte} em {raiz} (esperado {esperado})."

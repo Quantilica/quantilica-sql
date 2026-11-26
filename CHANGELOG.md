@@ -5,6 +5,21 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- **BCB SGS: `series_metadata` criada e preenchida pelo adaptador `bcb`.** Antes nenhum adaptador criava essa tabela, que as SQL de `macro/*` e `setorial/*` do `quantilica-pipelines` juntam a `series_data` (`name`, `name_abbreviated`, `unit`, `frequency`, `theme_hierarchy`): em banco novo, `load bcb-sgs --all` seguido de `quantilica sql run macro/bcb_precos` falhava com `relation "series_metadata" does not exist`, e o `scaffold -t bcb` gerava um SQL com o mesmo defeito. Agora `load bcb --all` (ou `--table <id>`) carrega as observações **e** os metadados do bruto do `bcb-sgs-fetcher` (`bcb-sgs_AAAA-MM/metadata/<id>.json`, `{"basic", "full"}`; a pasta `data/` ou uma pasta mensal também servem, e o `<id>_basic.json` é aceito). Um arquivo de metadados sozinho também carrega (`load bcb -s .../000433.json`).
+- A tabela tem uma linha por série (`series_id` é a chave), com os campos de `basic` (`name`, `name_abbreviated`, `name_english`, `name_english_abbreviated`, `theme_hierarchy text[]` com índice GIN, `frequency`, `unit`, `source`, `start_date`, `end_date`, `series_type`, `precision`, `min_value`, `max_value`, `manager_owner`, `special`, `formula`, `primitive_series`, `warning_message`) e `last_update` (a data dos metadados completos). Descrição, metodologia e formatos de divulgação ficam no bruto. Campo ausente ou vazio fica nulo: nada é inventado, e `frequency` é o texto do SGS (`Mensal`, `Diária`), não a sigla.
+- **Versão vigente, ledger e revisão.** Das cópias do mesmo `<id>.json` em vários meses vale a do mês mais novo (a `metadata/` direta vale mais, como no fetcher). O ledger usa `sha256` (`dataset = 'bcb-metadata'`, uma entrada por série): arquivo igual é pulado, o conteúdo novo substitui a linha inteira (uma renomeação na fonte atualiza o nome, e o campo que a fonte deixou de informar volta a ser nulo), `--force` recarrega. Cada arquivo é uma transação (linha e ledger juntos). JSON ilegível, `basic` que não é objeto e id de dentro diferente do nome param a carga com o caminho do arquivo; `{"basic": null}` é ignorado com aviso.
+- **Série com dados e sem metadado não é erro**, mas o `load` avisa (com os ids) e `status()` informa `series_sem_metadata` e `series_sem_metadata_ids` (as SQL de `macro/*` usam `INNER JOIN` e não as veem), além de `series_metadata_rows`, `metadados_carregados` e `metadados_sem_dados`. Pasta só com metadados (sem dados) também carrega.
+- Fixtures reais em `tests/data/bcb` (as séries 433, 189, 188, 11 e 432, gravadas pelo `bcb-sgs-fetcher` em 26/11/2026) e teste de ponta a ponta: `load bcb --all` num schema novo seguido de `macro/bcb_precos` e `macro/juros` do catálogo, rodados pelo runner, sem nenhuma tabela declarada pelo teste.
+
+### Alterado
+- O adaptador `bcb` só roda DDL quando falta alguma tabela ou índice (um papel que só carrega, sem `CREATE` no schema, funciona). Um banco criado pela 0.4.0, que só tinha `series_data`, ganha `series_metadata` na próxima carga com um papel que possa criar tabelas.
+- `arquivos_vigentes` (resolvedor de entrada compartilhado) aceita `permitir_vazio`: devolve lista vazia, em vez de erro, quando o adaptador ainda tem outra coisa a carregar da pasta. O padrão não muda.
+- Uma pasta do bruto do BCB sem arquivo de dados, mas com metadados, deixa de ser erro (carrega os metadados); sem nenhum dos dois continua sendo.
+- `scaffold -t bcb`: comentários no SQL e no `fetch.toml` dizem de onde vem `series_metadata`; teste novo roda `EXPLAIN` do SQL gerado contra as tabelas que o adaptador cria.
+
 ## [0.4.0] - 2026-11-26
 
 ### Alterado (quebra)

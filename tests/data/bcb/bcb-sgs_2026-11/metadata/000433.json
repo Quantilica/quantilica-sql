@@ -1,0 +1,193 @@
+{
+ "basic": {
+  "series_id": 433,
+  "name": "Índice nacional de preços ao consumidor-amplo (IPCA)",
+  "name_abbreviated": "Índice nacional de preços ao consumidor-amplo (IPCA)",
+  "name_english": "Broad National Consumer Price Index (IPCA)",
+  "name_english_abbreviated": "Broad National Consumer Price Index (IPCA)",
+  "theme_hierarchy": [
+   "Atividade econômica e preços",
+   "Preços",
+   "IPCA",
+   "IPCA e abertura por grupos"
+  ],
+  "frequency": "Mensal",
+  "unit": "Var. % mensal",
+  "source": "IBGE",
+  "start_date": "1980-01-01",
+  "end_date": null,
+  "series_type": "COMUM",
+  "precision": 2,
+  "min_value": null,
+  "max_value": null,
+  "manager_owner": "DEPEC/GEPRE/DIPRE",
+  "special": false,
+  "formula": null,
+  "primitive_series": null,
+  "warning_message": null
+ },
+ "full": {
+  "last_update": "2026-01-27",
+  "provider_data": [
+   {
+    "field": "Pessoa para Contato",
+    "value": "FABIO AUGUSTO FUJITA"
+   },
+   {
+    "field": "Instituição e Componente",
+    "value": "DEPEC/GEPRE/DIPRE"
+   },
+   {
+    "field": "Complemento",
+    "value": null
+   },
+   {
+    "field": "Número do Telefone",
+    "value": "145"
+   },
+   {
+    "field": "Número do Fax",
+    "value": "http://www.bcb.gov.br/pre/bc_atende/port/centaten.asp?idPai=PORTALBCB"
+   },
+   {
+    "field": "Endereço eletrônico",
+    "value": "https://www.bcb.gov.br/acessoinformacao/faleconosco"
+   }
+  ],
+  "description": [
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Conceito",
+    "value": "Indicadores que mensuram a variação de preços (sob a ótica do consumidor). Os principais indicadores coletados são:\n\n* [IPC-Fipe](http://www4.bcb.gov.br/pec/series/port/metadados/mg41Ap.htm)\n* [IPCA](http://www4.bcb.gov.br/pec/series/port/metadados/mg41Bp.htm)\n* [IPCA-15](http://www4.bcb.gov.br/pec/series/port/metadados/mg41Cp.htm)\n* [INPC](http://www4.bcb.gov.br/pec/series/port/metadados/mg41Dp.htm)\n* [IPCA-E](http://www4.bcb.gov.br/pec/series/port/metadados/mg41Fp.htm)\n\n**Conceito –** O IPCA tem por objetivo medir a inflação de um conjunto de produtos e serviços comercializados no varejo, referentes ao consumo pessoal das famílias. Para garantir uma cobertura de 90% das famílias das áreas urbanas do País, abrange atualmente aquelas com rendimentos de 1 a 40 salários mínimos nas regiões metropolitanas de Belém, Fortaleza, Recife, Salvador, Belo Horizonte, Vitória, Rio de Janeiro, São Paulo, Curitiba e Porto Alegre, além do Distrito Federal e dos municípios de Goiânia, Campo Grande, Rio Branco, São Luís e Aracaju. Mais detalhes na página do IBGE, em <https://www.ibge.gov.br/estatisticas/economicas/precos-e-custos/9256-indice-nacional-de-precos-ao-consumidor-amplo.html?=&t=o-que-e>"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Fonte",
+    "value": "Instituto Brasileiro de Geografia e Estatística"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Unidade",
+    "value": "Variação percentual mensal"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Periodicidade",
+    "value": "Mensal"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Interrupções",
+    "value": ""
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Tempestividade",
+    "value": ""
+   },
+   {
+    "section": "Integridade",
+    "field": "Divulgação dos termos e condições sob as quais as estatísticas oficiais são preparadas, incluindo confidencialidade das respostas individuais",
+    "value": ""
+   },
+   {
+    "section": "Integridade",
+    "field": "Informação sobre revisão e comunicação antecipada de mudanças substanciais na metodologia",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Divulgação de documentação sobre a metodologia e as fontes usadas na preparação das estatísticas",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Divulgação de detalhes, conciliações com os dados relacionados e arcabouços estatísticos que possibilitem cruzamento de dados e assegurem razoabilidade às estatísticas.",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Notas",
+    "value": ""
+   }
+  ],
+  "methodology": [
+   {
+    "field": "Arcabouço analítico, conceitos, definições e classificações (incluindo referência a orientações aplicáveis)",
+    "value": ""
+   },
+   {
+    "field": "Abrangência dos dados (cobertura de e.g., unidades institucionais, transações e estoque, commodities, indústrias e áreas geográficas)",
+    "value": ""
+   },
+   {
+    "field": "Convenções contábeis (e.g. período de registro, métodos de avaliação)",
+    "value": ""
+   },
+   {
+    "field": "Natureza dos dados básicos (e.g., registros administrativos, pesquisas, levantamentos censitários, combinações destes)",
+    "value": ""
+   },
+   {
+    "field": "Práticas de compilação (e.g., esquemas de ponderação, métodos de imputação, técnicas de balanceamento/verificação)",
+    "value": ""
+   },
+   {
+    "field": "Outros aspectos (e.g., ajustamento sazonal, restrição na divulgação, ano-base, ano de referência, transformação de ano fiscal para ano civil)",
+    "value": ""
+   }
+  ],
+  "dissemination_formats": [
+   {
+    "format_type": "Em papel",
+    "field": "Nota para a imprensa",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim semanal",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim mensal",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim trimestral",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Outros",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Tabela ou banco de dados on line",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Endereço na Internet",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Disquete",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "CD ROM",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Outros",
+    "value": null
+   }
+  ]
+ }
+}

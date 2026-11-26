@@ -103,6 +103,30 @@ def test_scaffold_pipeline_bcb(tmp_path: Path):
     assert "series_metadata" in sql_content
 
 
+def test_scaffold_bcb_sql_passa_no_explain_contra_as_tabelas_que_o_load_cria(
+    pg_schema, tmp_path
+):
+    """O SQL do ``-t bcb`` resolve contra ``series_data`` e ``series_metadata``, que o
+    adaptador cria (vazias), com o schema no ``search_path`` como o runner faz."""
+    from psycopg import sql as psql
+
+    from quantilica_sql.adapters.bcb import BcbAdapter
+    from quantilica_sql.runner import infer_raw_schema
+
+    conn, schema = pg_schema
+
+    class _Bcb(BcbAdapter):
+        @property
+        def schema(self) -> str:
+            return schema
+
+    _Bcb()._ensure_tables(conn)
+    pipeline = scaffold_pipeline(tmp_path, "minhas_taxas", pipeline_type="bcb")
+    assert infer_raw_schema(pipeline) == "bcb_sgs"
+    conn.execute(psql.SQL("SET search_path TO {}").format(psql.Identifier(schema)))
+    conn.execute("EXPLAIN " + (pipeline / "minhas_taxas.sql").read_text("utf-8"))
+
+
 def test_scaffold_pipeline_general(tmp_path: Path):
     """Valida scaffold de pipeline tipo 'general' (cross-domain)."""
     path = scaffold_pipeline(tmp_path, "meu_cross", pipeline_type="general")

@@ -1,4 +1,14 @@
-"""Adaptador para séries temporais do BCB SGS."""
+"""Adaptador para séries temporais do BCB SGS: observações e metadados.
+
+Cria e preenche duas tabelas no schema ``bcb_sgs``:
+
+- ``series_data``: as observações (``data/series_<id>@AAAAMMDDTHHMMSS.json``), com
+  revisão por ponto (``ativo``);
+- ``series_metadata``: o catálogo da série (nome, unidade, periodicidade, fonte,
+  hierarquia de temas...), lido de ``bcb-sgs_AAAA-MM/metadata/<id>.json``. É a
+  tabela que as SQL de ``macro/*`` e ``setorial/*`` do ``quantilica-pipelines``
+  juntam a ``series_data``.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +25,16 @@ from psycopg import sql
 
 from quantilica_sql.adapters._entrada import arquivos_vigentes
 from quantilica_sql.adapters.base import BaseSourceAdapter
+from quantilica_sql.adapters.bcb_metadados import (
+    COLUNAS as _COLUNAS_METADADOS,
+)
+from quantilica_sql.adapters.bcb_metadados import (
+    DATASET_METADADOS,
+    arquivos_de_metadados,
+    eh_arquivo_de_metadados,
+    id_do_metadado,
+    ler_metadado,
+)
 from quantilica_sql.core.copy_stream import copy_from_rows
 from quantilica_sql.core.tracker import (
     ensure_tracker_table,
@@ -144,6 +164,54 @@ class BcbAdapter(BaseSourceAdapter):
                 )
                 distintas = cur.fetchone()[0]
 
+            cur.execute(
+                sql.SQL("SELECT count(*) FROM {} WHERE dataset = %s;").format(
+                    sql.Identifier(self.schema, "arquivo_carregado")
+                ),
+                (DATASET_METADADOS,),
+            )
+            metadados_carregados = cur.fetchone()[0]
+
+            metadados = sem_metadado = metadado_sem_dados = 0
+            ids_sem_metadado: list[int] = []
+            cur.execute(
+                "SELECT to_regclass(%s) IS NOT NULL;",
+                (f'"{self.schema}".series_metadata',),
+            )
+            if cur.fetchone()[0]:
+                meta = sql.Identifier(self.schema, "series_metadata")
+                cur.execute(sql.SQL("SELECT count(*) FROM {};").format(meta))
+                metadados = cur.fetchone()[0]
+                if series_data_exists:
+                    dados = sql.Identifier(self.schema, "series_data")
+                    cur.execute(
+                        sql.SQL(
+                            "SELECT d.series_id FROM (SELECT DISTINCT series_id "
+                            "FROM {dados}) d LEFT JOIN {meta} m "
+                            "ON m.series_id = d.series_id "
+                            "WHERE m.series_id IS NULL ORDER BY d.series_id;"
+                        ).format(dados=dados, meta=meta)
+                    )
+                    ids_sem_metadado = [r[0] for r in cur.fetchall()]
+                    sem_metadado = len(ids_sem_metadado)
+                    cur.execute(
+                        sql.SQL(
+                            "SELECT count(*) FROM {meta} m WHERE NOT EXISTS "
+                            "(SELECT 1 FROM {dados} d WHERE d.series_id = m.series_id);"
+                        ).format(dados=dados, meta=meta)
+                    )
+                    metadado_sem_dados = cur.fetchone()[0]
+                else:
+                    metadado_sem_dados = metadados
+            elif series_data_exists:
+                sem_metadado = distintas
+                cur.execute(
+                    sql.SQL("SELECT DISTINCT series_id FROM {} ORDER BY 1;").format(
+                        sql.Identifier(self.schema, "series_data")
+                    )
+                )
+                ids_sem_metadado = [r[0] for r in cur.fetchall()]
+
             return {
                 "domain": self.domain,
                 "schema": self.schema,
@@ -153,11 +221,44 @@ class BcbAdapter(BaseSourceAdapter):
                 "series_data_ativas": ativas,
                 "series_data_revisadas": revisadas,
                 "series_distintas": distintas,
+                "metadados_carregados": metadados_carregados,
+                "series_metadata_rows": metadados,
+                # Séries com dados e sem metadado: as SQL de macro/* (INNER JOIN em
+                # series_metadata) não as veem. Não é erro, mas precisa aparecer.
+                "series_sem_metadata": sem_metadado,
+                "series_sem_metadata_ids": ids_sem_metadado[:50],
+                "metadados_sem_dados": metadado_sem_dados,
             }
 
+    def _tabelas_prontas(self, conn: psycopg.Connection) -> bool:
+        """As tabelas e os índices já existem? (sem DDL: ``CREATE ... IF NOT EXISTS``
+        exige ``CREATE`` no schema, e o papel que só carrega pode não o ter)"""
+        nomes = [
+            f'"{self.schema}".{n}'
+            for n in (
+                "series_data",
+                "uq_bcb_sgs_series_date",
+                "series_metadata",
+                "series_metadata_theme_hierarchy_idx",
+            )
+        ]
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT " + " AND ".join("to_regclass(%s) IS NOT NULL" for _ in nomes),
+                nomes,
+            )
+            row = cur.fetchone()
+        return bool(row and row[0])
+
     def _ensure_tables(self, conn: psycopg.Connection) -> None:
-        """Garante a existência da tabela e índices de séries do BCB SGS."""
+        """Garante as tabelas ``series_data`` e ``series_metadata`` e seus índices.
+
+        Um banco criado pela 0.4.0 (só ``series_data``) ganha ``series_metadata`` na
+        próxima carga.
+        """
         ensure_schema(conn, self.schema)
+        if self._tabelas_prontas(conn):
+            return
         create_sql = sql.SQL(
             """
             CREATE TABLE IF NOT EXISTS {schema}.series_data (
@@ -171,6 +272,32 @@ class BcbAdapter(BaseSourceAdapter):
             CREATE UNIQUE INDEX IF NOT EXISTS uq_bcb_sgs_series_date
             ON {schema}.series_data (series_id, date)
             WHERE ativo;
+            CREATE TABLE IF NOT EXISTS {schema}.series_metadata (
+                series_id integer PRIMARY KEY,
+                name text,
+                name_abbreviated text,
+                name_english text,
+                name_english_abbreviated text,
+                theme_hierarchy text[],
+                frequency text,
+                unit text,
+                source text,
+                start_date date,
+                end_date date,
+                series_type text,
+                precision integer,
+                min_value numeric,
+                max_value numeric,
+                manager_owner text,
+                special boolean,
+                formula text,
+                primitive_series text,
+                warning_message text,
+                last_update date,
+                loaded_at timestamptz NOT NULL DEFAULT clock_timestamp()
+            );
+            CREATE INDEX IF NOT EXISTS series_metadata_theme_hierarchy_idx
+            ON {schema}.series_metadata USING gin (theme_hierarchy);
             """
         ).format(schema=sql.Identifier(self.schema))
         with conn.cursor() as cur:
@@ -180,6 +307,7 @@ class BcbAdapter(BaseSourceAdapter):
     def _load_directory(
         self, conn: psycopg.Connection, raiz: Path, **kwargs: Any
     ) -> int:
+        """Pasta do bruto: observações e metadados (``--all`` ou ``--table <id>``)."""
         serie = kwargs.get("table")
         arquivos = arquivos_vigentes(
             raiz,
@@ -193,13 +321,135 @@ class BcbAdapter(BaseSourceAdapter):
             flag_chave="--table <id da série>",
             esperado="data/series_<id>@AAAAMMDDTHHMMSS.json",
             logger=logger,
+            permitir_vazio=True,
         )
+        metadados = arquivos_de_metadados(raiz, serie=serie)
+        if not arquivos and not metadados:
+            alvo = f" da série {serie}" if serie else ""
+            raise ValueError(
+                f"nenhum arquivo de dados{alvo} do BCB SGS em {raiz} (esperado "
+                "data/series_<id>@AAAAMMDDTHHMMSS.json e "
+                "bcb-sgs_AAAA-MM/metadata/<id>.json)."
+            )
         total = 0
         for arquivo in arquivos:
             total += self.load(
                 conn, arquivo, **{**kwargs, "table": None, "series_id": None}
             )
+        force = bool(kwargs.get("force"))
+        for arquivo in metadados:
+            total += self._load_metadata_file(conn, arquivo, force=force)
+        if arquivos and not metadados:
+            logger.warning(
+                "BCB SGS: nenhum metadado em %s (esperado "
+                "bcb-sgs_AAAA-MM/metadata/<id>.json): as SQL de macro/* e setorial/* "
+                "juntam series_metadata e não verão as séries carregadas.",
+                raiz,
+            )
+        self._avisar_sem_metadado(conn)
         return total
+
+    def _avisar_sem_metadado(self, conn: psycopg.Connection) -> None:
+        """Avisa das séries carregadas (pelo ledger) que não têm linha em
+        ``series_metadata``. Não é erro."""
+        with conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    "SELECT a.particao FROM {ledger} a LEFT JOIN {meta} m "
+                    "ON m.series_id::text = a.particao WHERE a.dataset = %s "
+                    "AND m.series_id IS NULL GROUP BY a.particao "
+                    "ORDER BY a.particao::int"
+                ).format(
+                    ledger=sql.Identifier(self.schema, "arquivo_carregado"),
+                    meta=sql.Identifier(self.schema, "series_metadata"),
+                ),
+                (self.domain,),
+            )
+            ids = [r[0] for r in cur.fetchall()]
+        if ids:
+            logger.warning(
+                "BCB SGS: %d série(s) com dados e sem metadado (as SQL de macro/* e "
+                "setorial/* não as veem): %s%s",
+                len(ids),
+                ", ".join(ids[:10]),
+                " ..." if len(ids) > 10 else "",
+            )
+
+    def _load_metadata_file(
+        self, conn: psycopg.Connection, path: Path, *, force: bool = False
+    ) -> int:
+        """Carrega os metadados de uma série (``<id>.json`` do fetcher).
+
+        Substitui a linha da série: campo que o arquivo não traz fica nulo, e uma
+        renomeação na fonte atualiza o nome. Ledger por ``sha256`` (``--force``
+        recarrega). Devolve 1 se carregou, 0 se pulou ou se o arquivo não tem dados
+        básicos.
+        """
+        if not path.exists():
+            raise FileNotFoundError(
+                f"arquivo de metadados do BCB SGS não existe: {path}"
+            )
+        series_id = id_do_metadado(path)
+        particao = str(series_id)
+        do_load, digest = self.should_load_file(
+            conn,
+            path,
+            dataset=DATASET_METADADOS,
+            particao=particao,
+            force=force,
+            filename=path.name,
+        )
+        if not do_load:
+            logger.info(
+                "Metadados da série BCB %s (%s) já carregados em %s.arquivo_carregado. "
+                "Pulando.",
+                particao,
+                path.name,
+                self.schema,
+            )
+            return 0
+        meta = ler_metadado(path)  # erro de formato sai antes de tocar o banco
+        if meta is None:
+            logger.warning("%s: sem dados básicos da série; nada a carregar.", path)
+            return 0
+
+        self._ensure_tables(conn)
+        colunas = sql.SQL(", ").join(sql.Identifier(c) for c in _COLUNAS_METADADOS)
+        valores = sql.SQL(", ").join(sql.Placeholder() for _ in _COLUNAS_METADADOS)
+        atualiza = sql.SQL(", ").join(
+            sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(c))
+            for c in _COLUNAS_METADADOS
+            if c != "series_id"
+        )
+        upsert = sql.SQL(
+            "INSERT INTO {t} ({cols}) VALUES ({vals}) ON CONFLICT (series_id) "
+            "DO UPDATE SET {upd}, loaded_at = clock_timestamp()"
+        ).format(
+            t=sql.Identifier(self.schema, "series_metadata"),
+            cols=colunas,
+            vals=valores,
+            upd=atualiza,
+        )
+        with self.atomic_file(
+            conn,
+            filename=path.name,
+            dataset=DATASET_METADADOS,
+            particao=particao,
+            sha256=digest,
+            replace=False,  # a linha da série é substituída pelo upsert
+        ):
+            with conn.cursor() as cur:
+                cur.execute(upsert, meta.linha())
+            record_loaded_file(
+                conn,
+                schema=self.schema,
+                filename=path.name,
+                dataset=DATASET_METADADOS,
+                rows_loaded=1,
+                particao=particao,
+                metadata={"series_id": meta.series_id},
+            )
+        return 1
 
     def load(
         self,
@@ -207,7 +457,8 @@ class BcbAdapter(BaseSourceAdapter):
         source_path: Path | None = None,
         **kwargs: Any,
     ) -> int:
-        """Carrega um snapshot de série, ou uma pasta do bruto (``--all``/``--table``).
+        """Carrega um snapshot de série, os metadados de uma série (``<id>.json``) ou
+        uma pasta do bruto (``--all``/``--table``: observações e metadados).
 
         Revisão: o snapshot é a série inteira. Onde o valor de um ponto difere do
         ativo, o ativo é desativado e o novo entra; ponto idêntico é no-op e ponto
@@ -215,6 +466,10 @@ class BcbAdapter(BaseSourceAdapter):
         """
         if source_path is not None and Path(source_path).is_dir():
             return self._load_directory(conn, Path(source_path), **kwargs)
+        if source_path is not None and eh_arquivo_de_metadados(Path(source_path)):
+            return self._load_metadata_file(
+                conn, Path(source_path), force=bool(kwargs.get("force"))
+            )
 
         series_id = kwargs.get("series_id")
         if series_id is None:

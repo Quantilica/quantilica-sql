@@ -105,9 +105,9 @@ def test_entrada_table_sem_correspondencia_da_erro_claro(bruto):
         get_adapter("bcb").load(MockDbState().make_conn(), bruto, table="7")
 
 
-def test_entrada_pasta_sem_arquivo_de_dados_da_erro_claro(tmp_path):
+def test_entrada_pasta_sem_dados_nem_metadados_da_erro_claro(tmp_path):
     (tmp_path / "bcb-sgs_2026-11" / "metadata").mkdir(parents=True)
-    (tmp_path / "bcb-sgs_2026-11" / "metadata" / "000433.json").write_text("{}")
+    (tmp_path / "bcb-sgs_2026-11" / "metadata" / "series.html").write_text("<html/>")
     with pytest.raises(ValueError, match="nenhum arquivo de dados do BCB SGS"):
         get_adapter("bcb").load(MockDbState().make_conn(), tmp_path, all=True)
 

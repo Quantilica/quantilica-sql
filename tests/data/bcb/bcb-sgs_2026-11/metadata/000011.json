@@ -1,0 +1,192 @@
+{
+ "basic": {
+  "series_id": 11,
+  "name": "Taxa de juros - Selic",
+  "name_abbreviated": "Selic",
+  "name_english": "Interest rate - Selic",
+  "name_english_abbreviated": "Selic",
+  "theme_hierarchy": [
+   "Mercados financeiros e de capitais",
+   "Indicadores do mercado financeiro",
+   "Taxas de juros"
+  ],
+  "frequency": "Diária",
+  "unit": "% a.d.",
+  "source": "BCB-Demab",
+  "start_date": "1986-06-04",
+  "end_date": null,
+  "series_type": "COMUM",
+  "precision": 6,
+  "min_value": null,
+  "max_value": null,
+  "manager_owner": "DEMAB/DICEL",
+  "special": false,
+  "formula": null,
+  "primitive_series": null,
+  "warning_message": null
+ },
+ "full": {
+  "last_update": "2021-12-23",
+  "provider_data": [
+   {
+    "field": "Pessoa para Contato",
+    "value": "ANDRE DE OLIVEIRA CASTANHEIRA RODRIGUES"
+   },
+   {
+    "field": "Instituição e Componente",
+    "value": "DEMAB/DICEL"
+   },
+   {
+    "field": "Complemento",
+    "value": null
+   },
+   {
+    "field": "Número do Telefone",
+    "value": "145"
+   },
+   {
+    "field": "Número do Fax",
+    "value": "http://www.bcb.gov.br/pre/bc_atende/port/centaten.asp?idPai=PORTALBCB"
+   },
+   {
+    "field": "Endereço eletrônico",
+    "value": "https://www.bcb.gov.br/acessoinformacao/faleconosco"
+   }
+  ],
+  "description": [
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Conceito",
+    "value": "Metadados em construção"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Fonte",
+    "value": "Banco Central do Brasil – Departamento de Operações do Mercado Aberto"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Unidade",
+    "value": "Percentual ao dia"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Periodicidade",
+    "value": "Diária"
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Interrupções",
+    "value": ""
+   },
+   {
+    "section": "Dados: Conceito, Periodicidade e Tempestividade",
+    "field": "Tempestividade",
+    "value": ""
+   },
+   {
+    "section": "Integridade",
+    "field": "Divulgação dos termos e condições sob as quais as estatísticas oficiais são preparadas, incluindo confidencialidade das respostas individuais",
+    "value": ""
+   },
+   {
+    "section": "Integridade",
+    "field": "Informação sobre revisão e comunicação antecipada de mudanças substanciais na metodologia",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Divulgação de documentação sobre a metodologia e as fontes usadas na preparação das estatísticas",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Divulgação de detalhes, conciliações com os dados relacionados e arcabouços estatísticos que possibilitem cruzamento de dados e assegurem razoabilidade às estatísticas.",
+    "value": ""
+   },
+   {
+    "section": "Qualidade",
+    "field": "Notas",
+    "value": ""
+   }
+  ],
+  "methodology": [
+   {
+    "field": "Arcabouço analítico, conceitos, definições e classificações (incluindo referência a orientações aplicáveis)",
+    "value": ""
+   },
+   {
+    "field": "Abrangência dos dados (cobertura de e.g., unidades institucionais, transações e estoque, commodities, indústrias e áreas geográficas)",
+    "value": ""
+   },
+   {
+    "field": "Convenções contábeis (e.g. período de registro, métodos de avaliação)",
+    "value": ""
+   },
+   {
+    "field": "Natureza dos dados básicos (e.g., registros administrativos, pesquisas, levantamentos censitários, combinações destes)",
+    "value": ""
+   },
+   {
+    "field": "Práticas de compilação (e.g., esquemas de ponderação, métodos de imputação, técnicas de balanceamento/verificação)",
+    "value": ""
+   },
+   {
+    "field": "Outros aspectos (e.g., ajustamento sazonal, restrição na divulgação, ano-base, ano de referência, transformação de ano fiscal para ano civil)",
+    "value": ""
+   }
+  ],
+  "dissemination_formats": [
+   {
+    "format_type": "Em papel",
+    "field": "Nota para a imprensa",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim semanal",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim mensal",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Boletim trimestral",
+    "value": null
+   },
+   {
+    "format_type": "Em papel",
+    "field": "Outros",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Tabela ou banco de dados on line",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Endereço na Internet",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Disquete",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "CD ROM",
+    "value": null
+   },
+   {
+    "format_type": "Em meio eletrônico",
+    "field": "Outros",
+    "value": null
+   }
+  ]
+ }
+}

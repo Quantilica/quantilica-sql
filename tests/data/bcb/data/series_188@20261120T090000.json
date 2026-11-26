@@ -1,0 +1,122 @@
+[
+ {
+  "series_id": 188,
+  "date": "2025-03-01",
+  "value": "0.51",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-04-01",
+  "value": "0.48",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-05-01",
+  "value": "0.35",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-06-01",
+  "value": "0.23",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-07-01",
+  "value": "0.21",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-08-01",
+  "value": "-0.21",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-09-01",
+  "value": "0.52",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-10-01",
+  "value": "0.03",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-11-01",
+  "value": "0.03",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2025-12-01",
+  "value": "0.21",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-01-01",
+  "value": "0.39",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-02-01",
+  "value": "0.56",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-03-01",
+  "value": "0.91",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-04-01",
+  "value": "0.81",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-05-01",
+  "value": "0.65",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-06-01",
+  "value": "0.14",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-07-01",
+  "value": "-0.01",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-08-01",
+  "value": "-0.32",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-09-01",
+  "value": "0.82",
+  "date_end": null
+ },
+ {
+  "series_id": 188,
+  "date": "2026-10-01",
+  "value": "0.22",
+  "date_end": null
+ }
+]
