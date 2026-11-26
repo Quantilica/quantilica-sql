@@ -33,7 +33,7 @@ from quantilica_sql.sidra.metadados import metadados_da_pasta
 logger = logging.getLogger("quantilica_sql.adapters.sidra")
 
 _RE_TABELA_NO_NOME = re.compile(r"^t-(\d+)(?:_|@|\.|$)")
-_RE_CARIMBO = re.compile(r"@(\d{8})(?:T\d{6})?\.json$")
+_RE_CARIMBO = re.compile(r"@(\d{8})(?:T(\d{6}))?\.json$")
 _NAO_SAO_DADOS = ("metadados@", "indice_pesquisas@")
 _SEM_DATA = dt.date(1, 1, 1)  # ``@00010101``: o SIDRA não informou a modificação
 
@@ -89,6 +89,20 @@ def modificacao_do_arquivo(path: Path) -> dt.date | None:
                 return data
     m = _RE_CARIMBO.search(path.name)
     return _parse_modificacao(m.group(1), origem=path.name) if m else None
+
+
+def vigencia_do_arquivo(path: Path, modificacao: dt.date | None) -> dt.datetime | None:
+    """``modificacao`` com a hora do carimbo ``@AAAAMMDDTHHMMSS`` do nome, quando o
+    carimbo é do mesmo dia (versões do mesmo dia se ordenam pela hora); senão, a
+    meia-noite. Sem data, ``None``."""
+    if modificacao is None:
+        return None
+    hora = dt.time()
+    m = _RE_CARIMBO.search(path.name)
+    if m and m.group(2) and m.group(1) == modificacao.strftime("%Y%m%d"):
+        h = m.group(2)
+        hora = dt.time(int(h[:2]), int(h[2:4]), int(h[4:]))
+    return dt.datetime.combine(modificacao, hora)
 
 
 def _id_da_tabela(path: Path) -> str | None:
@@ -261,11 +275,14 @@ class SidraAdapter(BaseSourceAdapter):
                 f"{arquivo}: o nome diz tabela {tabela}, os metadados dizem "
                 f"{lido.tabela_id}."
             )
+        modificacao = modificacao_do_arquivo(arquivo)
         res = carregador.carregar(
             lido,
             filename=arquivo.name,
             sha256=digest,
-            modificacao=modificacao_do_arquivo(arquivo),
+            modificacao=modificacao,
+            vigencia_em=vigencia_do_arquivo(arquivo, modificacao),
+            force=force,
         )
         logger.info(
             "SIDRA %s: %d observação(ões)%s.",

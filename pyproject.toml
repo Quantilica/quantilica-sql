@@ -89,6 +89,7 @@ select = ["E", "F", "I", "UP", "B"]
 # SQL de teste em linhas longas
 "tests/test_sidra_esquema.py" = ["E501"]
 "tests/test_sidra_carga.py" = ["E501"]
+"tests/test_sidra_vigencia.py" = ["E501"]
 
 [tool.uv]
 required-version = ">=0.9"

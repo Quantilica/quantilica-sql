@@ -15,9 +15,31 @@ from quantilica_sql.database import ensure_schema
 logger = logging.getLogger("quantilica_sql.tracker")
 
 
+def _ledger_completo(conn: psycopg.Connection, schema: str, idx_name: str) -> bool:
+    """O ledger e o índice de ``sha256`` já existem? (sem DDL: ``CREATE ... IF NOT
+    EXISTS`` exige ser dono, e o papel que só carrega não é)"""
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT to_regclass(%s) IS NOT NULL AND EXISTS ("
+                "SELECT 1 FROM pg_indexes WHERE schemaname = %s AND indexname = %s)"
+            ),
+            (
+                '"' + schema.replace('"', '""') + '".arquivo_carregado',
+                schema,
+                idx_name,
+            ),
+        )
+        row = cur.fetchone()
+    return bool(row and row[0])
+
+
 def ensure_tracker_table(conn: psycopg.Connection, schema: str) -> None:
     """Garante que a tabela de idempotência existe no schema do domínio."""
     ensure_schema(conn, schema)
+    idx_name = f"idx_{schema}_arquivo_sha256"
+    if _ledger_completo(conn, schema, idx_name):
+        return  # papel sem posse do ledger não pode rodar nem o IF NOT EXISTS
     create_table_sql = sql.SQL(
         """
         CREATE TABLE IF NOT EXISTS {schema}.{table} (
@@ -35,7 +57,6 @@ def ensure_tracker_table(conn: psycopg.Connection, schema: str) -> None:
         schema=sql.Identifier(schema),
         table=sql.Identifier("arquivo_carregado"),
     )
-    idx_name = f"idx_{schema}_arquivo_sha256"
     create_index_sql = sql.SQL(
         "CREATE INDEX IF NOT EXISTS {idx_name} ON {schema}.{table} (sha256);"
     ).format(

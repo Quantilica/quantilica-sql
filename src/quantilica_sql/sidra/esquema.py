@@ -38,7 +38,7 @@ logger = logging.getLogger("quantilica_sql.sidra.esquema")
 
 DATASET = "sidra"  # ``dataset`` do ledger ``arquivo_carregado``
 TABELA_ANTIGA = "dados_legado_v0"
-ESQUEMA_VERSAO = 1  # sobe quando a DDL muda; fica no COMMENT de ``tabela``
+ESQUEMA_VERSAO = 2  # sobe quando a DDL muda; fica no COMMENT de ``tabela``
 _MARCA = f"quantilica-sql:sidra:esquema:v{ESQUEMA_VERSAO}"
 MAX_CLASSIFICACOES_NA_VIEW = 6  # d4..d9, o limite que o portal já declara
 
@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS {s}.versao (
     tabela_id    integer     NOT NULL REFERENCES {s}.tabela (id),
     consulta     text        NOT NULL,
     modificacao  date,
+    vigencia_em  timestamp,
     arquivo      text        NOT NULL,
     sha256       text,
     linhas       bigint      NOT NULL DEFAULT 0,
@@ -164,6 +165,10 @@ CREATE TABLE IF NOT EXISTS {s}.versao (
     carregado_em timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (tabela_id, arquivo)
 );
+-- esquema v1 não tinha estas colunas
+ALTER TABLE {s}.versao ADD COLUMN IF NOT EXISTS vigencia_em timestamp;
+ALTER TABLE {s}.versao
+    ADD COLUMN IF NOT EXISTS periodo_ids integer[] NOT NULL DEFAULT '{{}}'::integer[];
 CREATE INDEX IF NOT EXISTS versao_consulta_idx
     ON {s}.versao (tabela_id, consulta);
 
@@ -189,7 +194,8 @@ CREATE INDEX IF NOT EXISTS observacao_versao_idx
 -- um BRIN sobre a mesma expressão as serve (as tabelas entram em blocos contíguos)
 -- sem custo mensurável na carga.
 CREATE INDEX IF NOT EXISTS observacao_tabela_brin
-    ON {s}.observacao USING brin ((tabela_id::text));
+    ON {s}.observacao USING brin ((tabela_id::text)) WITH (autosummarize = on);
+ALTER INDEX {s}.observacao_tabela_brin SET (autosummarize = on);
 """
 
 
@@ -269,6 +275,37 @@ JOIN {s}.localidade l ON l.id = o.localidade_id
 JOIN {s}.periodo p ON p.id = o.periodo_id
 LEFT JOIN {s}.versao ve ON ve.id = o.versao_id;
 
+-- O que valia numa data: de cada consulta, a última versão até ela (uma revisão
+-- que removeu a célula a tira); entre consultas vence a de maior vigencia_em e, no
+-- empate, a primeira carregada. Mesma regra do ``ativo``. Versão sem data não entra.
+-- Dê a tabela (``dados_em(data, '1737')``) para ler só as versões dela; sem ela a
+-- função percorre o fato inteiro.
+CREATE OR REPLACE FUNCTION {s}.dados_em(data date, tabela text)
+RETURNS TABLE (
+    tabela_sidra_id text,
+    localidade_id   integer,
+    dimensao_id     integer,
+    periodo_id      integer,
+    modificacao     date,
+    ativo           boolean,
+    v               text
+)
+LANGUAGE sql STABLE AS $fn$
+    WITH ultimas AS (
+        SELECT DISTINCT ON (ve.tabela_id, ve.consulta)
+               ve.id, ve.tabela_id, ve.modificacao, ve.vigencia_em
+        FROM {s}.versao ve
+        WHERE ve.modificacao <= data AND ve.tabela_id = tabela::integer
+        ORDER BY ve.tabela_id, ve.consulta, ve.vigencia_em DESC, ve.id DESC
+    )
+    SELECT DISTINCT ON (o.serie_id, o.localidade_id, o.periodo_id)
+           o.tabela_id::text, o.localidade_id, o.serie_id, o.periodo_id,
+           u.modificacao, true, COALESCE(o.valor::text, o.simbolo)
+    FROM ultimas u
+    JOIN {s}.observacao o ON o.versao_id = u.id
+    ORDER BY o.serie_id, o.localidade_id, o.periodo_id, u.vigencia_em DESC, u.id ASC
+$fn$;
+
 CREATE OR REPLACE FUNCTION {s}.dados_em(data date)
 RETURNS TABLE (
     tabela_sidra_id text,
@@ -280,14 +317,19 @@ RETURNS TABLE (
     v               text
 )
 LANGUAGE sql STABLE AS $fn$
+    WITH ultimas AS (
+        SELECT DISTINCT ON (ve.tabela_id, ve.consulta)
+               ve.id, ve.tabela_id, ve.modificacao, ve.vigencia_em
+        FROM {s}.versao ve
+        WHERE ve.modificacao <= data
+        ORDER BY ve.tabela_id, ve.consulta, ve.vigencia_em DESC, ve.id DESC
+    )
     SELECT DISTINCT ON (o.serie_id, o.localidade_id, o.periodo_id)
            o.tabela_id::text, o.localidade_id, o.serie_id, o.periodo_id,
-           ve.modificacao, true, COALESCE(o.valor::text, o.simbolo)
-    FROM {s}.observacao o
-    JOIN {s}.versao ve ON ve.id = o.versao_id
-    WHERE ve.modificacao <= data
-    ORDER BY o.serie_id, o.localidade_id, o.periodo_id,
-             ve.modificacao DESC, ve.id DESC
+           u.modificacao, true, COALESCE(o.valor::text, o.simbolo)
+    FROM ultimas u
+    JOIN {s}.observacao o ON o.versao_id = u.id
+    ORDER BY o.serie_id, o.localidade_id, o.periodo_id, u.vigencia_em DESC, u.id ASC
 $fn$;
 """
 )
@@ -317,6 +359,45 @@ def mensagem_esquema_antigo(schema: str) -> str:
         f"vira {schema}.{TABELA_ANTIGA}, o registro de cargas do SIDRA é apagado e o "
         "esquema novo é criado; depois carregue de novo."
     )
+
+
+_COLUNAS_CHAVE = {
+    "localidade": {"nivel_codigo", "codigo"},
+    "periodo": {"frequencia", "codigo"},
+    "tabela": {"metadados"},
+    "versao": {"consulta", "arquivo"},
+    "observacao": {"serie_id", "versao_id"},
+}
+
+
+def _conferir_objetos_alheios(conn: psycopg.Connection, schema: str) -> None:
+    """Recusa, com mensagem clara, objeto de outro esquema com o nome de um nosso.
+
+    O ``sidra-sql`` legado também tinha ``localidade``, ``periodo`` e ``dimensao``
+    (tabelas) no schema; ``CREATE TABLE IF NOT EXISTS`` os pularia em silêncio e a
+    carga falharia adiante com erro de coluna.
+    """
+    for nome in (*TABELAS, *VIEWS):
+        tipo = _relkind(conn, schema, nome)
+        if tipo is None:
+            continue
+        esperado = "v" if nome in VIEWS else "r"
+        colunas_ok = True
+        if tipo == "r" and nome in _COLUNAS_CHAVE:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = %s",
+                    (schema, nome),
+                )
+                colunas_ok = _COLUNAS_CHAVE[nome] <= {r[0] for r in cur.fetchall()}
+        if tipo != esperado or not colunas_ok:
+            raise EsquemaAntigoError(
+                f"o schema {schema!r} já tem {nome!r} de outro esquema (tabela do "
+                "sidra-sql legado ou de outra carga), que não é a do modelo novo do "
+                "SIDRA. Mova esses objetos para outro schema (ou renomeie-os) e rode "
+                "a carga de novo; o quantilica-sql não sobrescreve objetos alheios."
+            )
 
 
 def _versao_marcada(conn: psycopg.Connection, schema: str) -> bool:
@@ -351,6 +432,7 @@ def criar_esquema(
     ensure_tracker_table(conn, schema)
     if not forcar and _versao_marcada(conn, schema):
         return
+    _conferir_objetos_alheios(conn, schema)
     ident = sql.Identifier(schema)
     with conn.cursor() as cur:
         cur.execute(sql.SQL(_DDL_TABELAS).format(s=ident))
