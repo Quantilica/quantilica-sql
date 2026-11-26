@@ -39,6 +39,7 @@ def arquivos_vigentes(
     normaliza_chave: Callable[[str], str] = str,
     glob: str = "*.json",
     logger: logging.Logger | None = None,
+    todas_as_versoes: bool = False,
 ) -> list[Path]:
     """Arquivos de dados vigentes de uma pasta do bruto, em ordem.
 
@@ -60,6 +61,9 @@ def arquivos_vigentes(
         normaliza_chave: normalização da chave (p. ex. tirar o prefixo ``t-``).
         glob: padrão dos arquivos candidatos.
         logger: onde avisar quantas versões antigas ficaram de fora.
+        todas_as_versoes: ``--historico``; devolve todas as versões carimbadas de
+            cada arquivo (em ordem de nome), não só a vigente. As demais regras
+            (sidecars, ``*.tmp``, auxiliares, ``--table``, erros) valem igual.
 
     Returns:
         Caminhos absolutos (``raiz / relativo``), um por arquivo vigente.
@@ -83,7 +87,7 @@ def arquivos_vigentes(
         and not p.name.endswith(_TEMP_SUFFIX)
         and eh_dado(p)
     ]
-    vigentes = select_current(rels)
+    vigentes = sorted(rels) if todas_as_versoes else select_current(rels)
     if logger is not None and len(vigentes) < len(rels):
         logger.info(
             "%s: %d arquivo(s) de versões antigas ficam de fora (vigente por "

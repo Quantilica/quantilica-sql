@@ -15,7 +15,6 @@ from psycopg import sql
 
 from quantilica_sql.adapters._entrada import arquivos_vigentes
 from quantilica_sql.adapters.base import BaseSourceAdapter
-from quantilica_sql.core.atomic import atomic_file_load
 from quantilica_sql.core.copy_stream import copy_from_rows
 from quantilica_sql.core.tracker import (
     ensure_tracker_table,
@@ -312,9 +311,8 @@ class BcbAdapter(BaseSourceAdapter):
 
         formatted_rows = self._sem_repeticao(formatted_rows, filename)
 
-        with atomic_file_load(
+        with self.atomic_file(
             conn,
-            schema=self.schema,
             filename=filename,
             dataset=self.domain,
             particao=series_id_str,

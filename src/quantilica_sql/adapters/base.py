@@ -250,11 +250,14 @@ class BaseSourceAdapter(ABC):
         particao: str = "",
         sha256: str | None = None,
         table: str | None = None,
+        replace: bool = True,
     ):
         """Escopo transacional da carga de um arquivo (dados + ledger juntos).
 
         Use ao redor do COPY e do ``record_and_commit``; substitui a carga anterior
-        do mesmo arquivo. Ver ``quantilica_sql.core.atomic``.
+        do mesmo arquivo (``replace``). Adaptadores cujas tabelas não têm
+        ``_arquivo`` (revisão por linha ou por versão) passam ``replace=False`` e
+        tratam a substituição sozinhos. Ver ``quantilica_sql.core.atomic``.
         """
         return atomic_file_load(
             conn,
@@ -264,6 +267,7 @@ class BaseSourceAdapter(ABC):
             dataset=dataset or self.domain,
             particao=particao,
             sha256=sha256,
+            replace=replace,
         )
 
     def record_and_commit(

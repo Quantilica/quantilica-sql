@@ -81,3 +81,20 @@ def test_pasta_sem_arquivo_de_dados_da_erro_claro(tmp_path):
 def test_table_sem_correspondencia_nomeia_a_chave(pasta):
     with pytest.raises(ValueError, match="nenhum arquivo de dados da tabela 9"):
         _resolve(pasta, all_partitions=False, table="9")
+
+
+def test_todas_as_versoes_devolve_cada_versao_sem_sidecar_tmp_nem_auxiliar(pasta):
+    nomes = [p.name for p in _resolve(pasta, todas_as_versoes=True)]
+    assert nomes == [
+        "arq_1@20260101.json",
+        "arq_1@20260201.json",
+        "arq_2@20260101T100000.json",
+        "arq_2@20260101T120000.json",
+    ]
+
+
+def test_todas_as_versoes_respeita_table_e_exige_all_ou_table(pasta):
+    nomes = _resolve(pasta, all_partitions=False, table="1", todas_as_versoes=True)
+    assert [p.name for p in nomes] == ["arq_1@20260101.json", "arq_1@20260201.json"]
+    with pytest.raises(ValueError, match="--all.*--table <id>"):
+        _resolve(pasta, all_partitions=False, todas_as_versoes=True)
