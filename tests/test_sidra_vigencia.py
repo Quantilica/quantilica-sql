@@ -299,7 +299,7 @@ def test_papel_que_nao_criou_o_schema_nem_e_dono_do_ledger_carrega(
     adapter, conn, schema = pg
     papel = f"qsql_c_{uuid.uuid4().hex[:8]}"
     criar_esquema(conn, schema)  # o superusuário cria e é o dono de tudo
-    conn.execute(f'CREATE ROLE "{papel}" LOGIN')
+    conn.execute(f"CREATE ROLE \"{papel}\" LOGIN PASSWORD '{papel}'")
     try:
         conn.execute(f'GRANT USAGE ON SCHEMA "{schema}" TO "{papel}"')
         conn.execute(
@@ -308,7 +308,7 @@ def test_papel_que_nao_criou_o_schema_nem_e_dono_do_ledger_carrega(
         )
         raiz = copia_tabelas(tmp_path / "bruto", "1737")
         with psycopg.connect(
-            make_conninfo(pg_url, user=papel), autocommit=True
+            make_conninfo(pg_url, user=papel, password=papel), autocommit=True
         ) as restrito:
             assert adapter.load(restrito, raiz, all_partitions=True) == 6
             assert adapter.load(restrito, raiz, all_partitions=True) == 0

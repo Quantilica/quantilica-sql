@@ -486,7 +486,7 @@ def test_papel_restrito_so_com_usage_e_create_no_schema(pg_schema, pg_url):
     conn, schema = pg_schema
     papel = f"qsql_r_{uuid.uuid4().hex[:8]}"
     conn.execute(f'CREATE SCHEMA "{schema}"')
-    conn.execute(f'CREATE ROLE "{papel}" LOGIN')
+    conn.execute(f"CREATE ROLE \"{papel}\" LOGIN PASSWORD '{papel}'")
     try:
         conn.execute(f'GRANT USAGE, CREATE ON SCHEMA "{schema}" TO "{papel}"')
         banco = _um(conn, "SELECT current_database()")[0]
@@ -494,7 +494,7 @@ def test_papel_restrito_so_com_usage_e_create_no_schema(pg_schema, pg_url):
             conn, "SELECT has_database_privilege(%s, %s, 'CREATE')", (papel, banco)
         ) == (False,)
         with psycopg.connect(
-            make_conninfo(pg_url, user=papel), autocommit=True
+            make_conninfo(pg_url, user=papel, password=papel), autocommit=True
         ) as restrito:
             criar_esquema(restrito, schema)
             criar_esquema(restrito, schema)
