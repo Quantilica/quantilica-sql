@@ -11,9 +11,9 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
-from quantilica.core.lake import select_current
 from quantilica.core.manifests import MANIFEST_SIDECAR_SUFFIX
 
+from quantilica_sql.adapters._entrada import arquivos_vigentes
 from quantilica_sql.adapters.base import BaseSourceAdapter
 from quantilica_sql.core.copy_stream import copy_from_rows
 from quantilica_sql.core.tracker import (
@@ -193,47 +193,33 @@ class SidraAdapter(BaseSourceAdapter):
                 )
         commit_if_standalone(conn)
 
-    def _arquivos_vigentes(self, raiz: Path, tabela: str | None) -> list[Path]:
+    def _arquivos_vigentes(
+        self, raiz: Path, tabela: str | None, *, all_partitions: bool = True
+    ) -> list[Path]:
         """Arquivos de dados da pasta, só a versão vigente (``@AAAAMMDD`` mais
         novo) de cada consulta, em ordem. ``metadados@``, ``indice_pesquisas@``,
         sidecars e ``*.tmp`` não são dados."""
-        rels = [
-            p.relative_to(raiz).as_posix()
-            for p in raiz.rglob("*.json")
-            if p.is_file()
-            and not p.name.startswith(_NAO_SAO_DADOS)
-            and not p.name.endswith(MANIFEST_SIDECAR_SUFFIX)
-        ]
-        vigentes = select_current(rels)
-        if len(vigentes) < len(rels):
-            logger.info(
-                "SIDRA: %d arquivo(s) de versões antigas ficam de fora (vigente por "
-                "consulta).",
-                len(rels) - len(vigentes),
-            )
-        arquivos = [raiz / rel for rel in vigentes]
-        if tabela is not None:
-            alvo = tabela.removeprefix("t-")
-            arquivos = [a for a in arquivos if _id_da_tabela(a) == alvo]
-        return arquivos
+        return arquivos_vigentes(
+            raiz,
+            all_partitions=all_partitions,
+            table=tabela,
+            eh_dado=lambda p: not p.name.startswith(_NAO_SAO_DADOS),
+            chave_de=_id_da_tabela,
+            normaliza_chave=lambda c: c.removeprefix("t-"),
+            fonte="SIDRA",
+            esperado="t-<id>/t-<id>_...@AAAAMMDD.json",
+            logger=logger,
+        )
 
     def _load_directory(
         self, conn: psycopg.Connection, raiz: Path, **kwargs: Any
     ) -> int:
         tabela = kwargs.get("table")
-        tabela = str(tabela) if tabela else None
-        if not (kwargs.get("all_partitions") or kwargs.get("all")) and tabela is None:
-            raise ValueError(
-                f"{raiz} é uma pasta: passe --all para carregar todas as tabelas "
-                "(a versão vigente de cada arquivo) ou --table <id> para uma tabela."
-            )
-        arquivos = self._arquivos_vigentes(raiz, tabela)
-        if not arquivos:
-            alvo = f" da tabela {tabela}" if tabela else ""
-            raise ValueError(
-                f"nenhum arquivo de dados{alvo} do SIDRA em {raiz} "
-                "(esperado t-<id>/t-<id>_...@AAAAMMDD.json)."
-            )
+        arquivos = self._arquivos_vigentes(
+            raiz,
+            str(tabela) if tabela else None,
+            all_partitions=bool(kwargs.get("all_partitions") or kwargs.get("all")),
+        )
         total = 0
         for arquivo in arquivos:
             total += self.load(conn, arquivo, **{**kwargs, "table": None})
