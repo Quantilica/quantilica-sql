@@ -34,7 +34,8 @@ quantilica sql status
 # Executar um pipeline analítico declarativo
 quantilica sql run macro/ipca
 
-# Carga sob demanda de uma partição
+# Carga sob demanda de uma partição (adaptadores `rfb`, `pdet`, `rtn`, `datasus` e
+# `tesouro-direto` estão congelados e avisam com FutureWarning: os microdados vão para o lake)
 quantilica sql load rfb --competencia 2023-10
 quantilica sql load pdet -s ./data/pdet
 
@@ -45,10 +46,18 @@ quantilica sql load sidra -s ./data/ibge-sidra --all --historico   # todas as ve
 quantilica sql load sidra -s ./data/ibge-sidra --all --force       # recarrega mesmo com o mesmo sha256
 quantilica sql load sidra -s ./data/ibge-sidra --all --recriar     # só para sair do esquema 0.3.x
 
-# Gestão de catálogos e plugins
+# Conferir manifest, fetch.toml e transform.toml de um catálogo, sem banco
+quantilica sql validate
+
+# Paridade tabela a tabela entre dois schemas, antes de uma troca
+quantilica sql compare <schema_a> <schema_b>
+
+# Gestão de catálogos e plugins (list, install, remove)
 quantilica sql plugin list
 quantilica sql plugin install https://github.com/Quantilica/quantilica-pipelines.git
 ```
+
+Outros comandos: `scaffold` (gera um pipeline ou catálogo declarativo), `tablespaces` e `maintenance`.
 
 ### Execução standalone (scripts, agendadores e contêineres)
 ```bash

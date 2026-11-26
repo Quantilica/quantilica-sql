@@ -5,6 +5,12 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Alterado
+- README: avisa que os adaptadores `rfb`, `pdet`, `rtn`, `datasus` e `tesouro-direto` estão congelados e lista os comandos que faltavam (`validate`, `compare`, `scaffold`, `tablespaces`, `maintenance`, `plugin remove`).
+- Testes: o arquivo de fixture é escolhido com `sorted()` e asserção de unicidade (`unico`, em `tests/_sidra_fixtures.py`), não o primeiro que o `glob` devolver.
+
 ## [0.4.1] - 2026-11-26
 
 ### Adicionado
