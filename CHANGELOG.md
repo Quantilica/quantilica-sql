@@ -5,7 +5,7 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.4.0] - 2026-11-26
 
 ### Alterado (quebra)
 - **SIDRA: esquema recriado, sem migração.** O adaptador `sidra` agora grava um modelo estrela em formato longo no schema `ibge_sidra` (`observacao`, `serie`, `serie_categoria`, `tabela`, `variavel`, `classificacao`, `categoria`, `localidade`, `periodo`, `versao` e o ledger), com a superfície das consultas do catálogo preservada (`dados`, `dimensao`, `localidade`, `periodo`; as duas primeiras são views). Antes só existia a tabela `dados` com os códigos crus. O `dados` do 0.3.x não se converte (guardava o código da variável como "dimensão", descartava as classificações e dava `UniqueViolation` em tabelas com mais de 3 dimensões): a primeira carga num schema antigo sai com código 1 e uma mensagem; `--recriar` renomeia a tabela antiga para `dados_legado_v0`, apaga do ledger as linhas do SIDRA e cria o esquema novo. Exige PostgreSQL 12+.
