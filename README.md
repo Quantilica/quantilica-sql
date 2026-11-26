@@ -74,9 +74,9 @@ Modelo estrela em formato longo. O papel de cada dimensão `D1..Dn` do arquivo v
 | `versao` | um arquivo = uma versão (`consulta`, `modificacao`, `sha256`) |
 | `dados`, `dimensao` (views), `localidade`, `periodo` | superfície das consultas do catálogo (`dados.v` é o texto do valor ou do símbolo) |
 | `observacao_plana` (view) | os nomes, com as categorias em JSONB, sem JOIN |
-| `dados_em(data)` (função) | o que valia numa data: a versão de maior `modificacao` até ela em cada célula |
+| `dados_em(data[, tabela])` (função) | o que valia numa data (hoje = `dados WHERE ativo`); com a tabela lê só as versões dela |
 
-Uma revisão do IBGE (arquivo `@data_nova` da mesma consulta) vira versão nova; a antiga fica como história. Só uma observação por célula é `ativo`: a da maior `modificacao`. A consulta "o que valia em D" é `dados_em(D)`; `modificacao <= D AND ativo` descarta o que foi revisado depois de D e não serve.
+Uma revisão do IBGE (arquivo `@data_nova` da mesma consulta) vira versão nova; a antiga fica como história. Só uma observação por célula é `ativo`: cada consulta afirma o que traz a sua última versão e, entre consultas, vence a de maior `modificacao` (empate: a primeira carregada); o resultado não depende da ordem de carga. Versão sem células, ou que perde mais de 50% das células da anterior, é recusada sem `--force`. Valor vazio vira `simbolo = ''`. A consulta "o que valia em D" é `dados_em(D)`; `modificacao <= D AND ativo` descarta o que foi revisado depois de D e não serve.
 
 ## Lake de Parquet (extra `lake`)
 
